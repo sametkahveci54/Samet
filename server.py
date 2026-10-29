@@ -15,6 +15,18 @@ VOICE = None
 CLONE = None
 ACTIONS = {'safari': [' /usr/bin/open'.strip(), '-a', 'Safari'], 'rechner': ['/usr/bin/open', '-a', 'Calculator']}
 
+def draft_text(system, text):
+    if not CHAT_LOCK.acquire(blocking=False):
+        raise ValueError('Jarvis beantwortet gerade eine Nachricht. Bitte kurz warten.')
+    try:
+        result = ollama('chat', {'model': 'qwen3:1.7b', 'messages': [
+            {'role': 'system', 'content': system}, {'role': 'user', 'content': text}],
+            'stream': False, 'think': False, 'keep_alive': '5m',
+            'options': {'num_ctx': 4096, 'num_predict': 500, 'temperature': 0.2}}, 180)
+        return result['message']['content']
+    finally:
+        CHAT_LOCK.release()
+
 def ollama(path, data=None, timeout=10):
     req = urllib.request.Request('http://127.0.0.1:11434/api/' + path,
         data=json.dumps(data).encode() if data is not None else None,
@@ -48,6 +60,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 return self.reply(200, {'online': False, 'model': 'qwen3:1.7b'})
         files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
+        if path == '/organizer.js': files[path] = ('organizer.js', 'text/javascript; charset=utf-8')
         if path not in files: return self.reply(404, {'error': 'Nicht gefunden.'})
         name, mime = files[path]
         self.reply(200, (ROOT / 'web' / name).read_bytes(), mime)
@@ -64,6 +77,9 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 65536: return self.reply(400, {'error': 'Anfrage zu groß oder leer.'})
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict): raise ValueError('Ungültige Anfrage.')
+            if self.path.startswith(('/api/connections/', '/api/mail/', '/api/calendar/')):
+                from integrations import handle
+                return self.reply(200, handle(self.path, data, draft_text))
             if self.path == '/api/action':
                 action = data.get('action')
                 if action in ACTIONS:
@@ -125,3 +141,4 @@ if __name__ == '__main__':
     server = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     print('Jarvis läuft auf http://127.0.0.1:8765', flush=True)
     server.serve_forever()
+

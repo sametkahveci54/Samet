@@ -99,7 +99,7 @@ $('chat-form').onsubmit = async e => {
   e.preventDefault(); const text = $('prompt').value.trim(); if (!text || busy) return;
   unlockSound(); recognition?.abort(); stopAudio(); coreState('thinking'); busy = true; $('dictate').disabled=true; $('send').disabled = true; $('clear').disabled = true; $('send').textContent = 'Denkt …';
   add('user', text); $('prompt').value = ''; history.push({role:'user',content:text});
-  try { const d = await api('/api/chat',{messages:history.slice(-16)}); history.push({role:'assistant',content:d.message}); add('assistant',d.message); if($('auto-speak').checked) speak(d.message); else $('speech-status').textContent='Ton ist ausgeschaltet. Aktiviere „Antworten vorlesen“ oder tippe auf „Vorlesen“.'; }
+  try { const organizerText = typeof organizerAnswer === 'function' ? await organizerAnswer(text) : null; const d = organizerText === null ? await api('/api/chat',{messages:history.slice(-16)}) : {message:organizerText}; history.push({role:'assistant',content:d.message}); add('assistant',d.message); if($('auto-speak').checked) speak(d.message); else $('speech-status').textContent='Ton ist ausgeschaltet. Aktiviere „Antworten vorlesen“ oder tippe auf „Vorlesen“.'; }
   catch(err) {add('assistant',err.message); history.pop();}
   finally {busy = false; if(document.body.dataset.state==='thinking')coreState('ready'); $('dictate').disabled=!Recognition; $('send').disabled = false; $('clear').disabled = false; $('send').textContent = 'Senden ↗';}
 };
@@ -111,3 +111,4 @@ $('clear').onclick = () => {history=[]; $('messages').replaceChildren(); stopAud
 async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● Modell bereit':'○ Ollama prüfen';}catch{$('status').textContent='○ Verbindung unterbrochen';}}
 status(); setInterval(status,30000);
 if(!window.speechSynthesis){for(const [value,label] of [['clone','Eigene Stimme · KI-Klon (lokal)'],['neural','Victoria · Weiblich / Kokoro (lokal)']]){const o=document.createElement('option');o.value=value;o.textContent=label;$('voice').append(o);} $('voice').value='clone';}
+

@@ -68,3 +68,32 @@ python3 -m unittest -v test_auto_update.py
 ```
 
 Normale Änderungen können nach dieser Aktivierung hier über GitHub bereitgestellt werden; die lokale Übernahme benötigt keinen weiteren Download von Hand. Das ist eine automatische Code-Aktualisierung, keine Weiterleitung an einen anderen Codex-Chat. Wer Schreibzugriff auf `main` hat, kann dadurch Code auf diesem Mac aktualisieren. Der Dienst führt ihn mit den Rechten des angemeldeten Benutzers aus.
+
+## Yahoo Mail und iCloud-Kalender
+
+Die Oberfläche enthält jetzt „Dein Tag im Blick“ und „Konten verbinden“. Bestehendes Design und Anna-Sprachausgabe werden beibehalten. Es sind keine neuen Python-Pakete nötig; das Update kann vom eingerichteten Dienst übernommen werden.
+
+Einmalig direkt in Jarvis eingeben (nicht in einen Chat oder eine versionierte Datei):
+
+- Yahoo-Konto und ein eigens für Jarvis erzeugtes Yahoo-App-Passwort: https://login.yahoo.com/account/security
+- Apple-Account-E-Mail und ein anwendungsspezifisches Passwort: https://account.apple.com/ → Anmeldung und Sicherheit → Anwendungsspezifische Passwörter. Apple verlangt Zwei-Faktor-Authentifizierung: https://support.apple.com/en-us/102654
+
+Der Server prüft die Anmeldung und speichert beide Verbindungen ausschließlich im macOS-Schlüsselbund unter `de.samet.jarvis.yahoo` und `de.samet.jarvis.icloud`. Der Schlüsselbund kann eine lokale Freigabe verlangen. Zugangsdaten werden weder über Git noch in Browser-localStorage gespeichert. Die Anmeldung erfolgt auf localhost oder über den vorhandenen privaten Tailscale-HTTPS-Zugang. „Trennen“ entfernt die lokale Verbindung; zum vollständigen Entzug das jeweilige App-Passwort zusätzlich beim Anbieter widerrufen.
+
+Funktionen:
+
+- Tagesübersicht der iCloud-Termine in Europe/Berlin mit Ganztagsterminen und serverseitiger Auflösung von Terminserien. Nicht aufgelöste oder unlesbare Serien/Ressourcen werden ausdrücklich als unvollständige Übersicht gemeldet. Höchstens 15 Kalender und 300 Ereignisse pro Abruf.
+- Im Chat: „Welche Termine habe ich heute?“ und „Was steht heute noch an?“ werden aus den Kalenderdaten beantwortet, ohne erfundene Modellantwort. Sonstige Chatfragen bekommen nicht automatisch Zugriff auf Mails oder Termine.
+- Neue einzelne Termine mit Kalenderwahl, Ort und optionaler Erinnerung. Erst die serverseitige Vorschau, dann die ausdrückliche Bestätigung speichert den Termin. Keine Einladungen, Änderungen bestehender Termine oder Konfliktprüfung. Bestätigungen sind zehn Minuten gültig und nur einmal verwendbar. Bei Verbindungsabbruch den Kalender prüfen, bevor erneut angelegt wird.
+- Die neuesten 20 Yahoo-Mails aus INBOX, per IMAP im Nur-Lesen-Modus und BODY.PEEK. Pro Mail maximal die ersten 32 KiB als Textauszug; keine Anhänge und keine Bilder/Tracker. Keine Mails löschen, verschieben oder als gelesen markieren.
+- Vorsichtige regelbasierte Einordnung anhand von Newsletter-Kopfzeilen und Betreffwörtern. „Prüfen“ und „Vermutlich Werbung“ sind Hilfestellungen, keine zuverlässige Wichtigkeits- oder Spamprüfung. Phishing wird nicht zuverlässig erkannt.
+- Antwortentwürfe aus einer ausgewählten, kürzlich geladenen Mail und einer ausdrücklichen Antwortvorgabe. Formulierung erfolgt im lokalen Ollama-Modell. Entwurf prüfen und kopieren; es gibt keinen Versand. Fremde Mailtexte sind Daten, keine Systemanweisungen. Mailauszüge und Vorschautermine bleiben nur im Server-Arbeitsspeicher und werden bei Neustart/Trennen verworfen.
+
+Offline-Tests (ohne echte Konten, Schlüsselbund oder Kalenderänderungen):
+
+```sh
+python3 -m unittest -v test_integrations.py test_integration_http.py
+```
+
+Die echten Yahoo-/iCloud-Anmeldungen und der macOS-Schlüsselbund müssen nach der persönlichen Freigabe auf dem Mac geprüft werden. UI-Tests mit Testdaten bestätigen keine echte Anbieter-Verbindung.
+
