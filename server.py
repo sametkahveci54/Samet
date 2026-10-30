@@ -4,6 +4,9 @@ import os, io, wave, json, secrets, subprocess, threading, urllib.request, urlli
 from datetime import datetime
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import jobs
+import personal
+import diagnostics
 
 ROOT = Path(__file__).resolve().parent
 LOCAL_CONFIG = json.loads((ROOT / 'config.local.json').read_text()) if (ROOT / 'config.local.json').is_file() else {}
@@ -28,10 +31,28 @@ def draft_text(system, text):
         CHAT_LOCK.release()
 
 def ollama(path, data=None, timeout=10):
+    streaming = path == 'chat' and data is not None and jobs.current() is not None
+    if streaming: data = {**data, 'stream': True}
+    jobs.check()
     req = urllib.request.Request('http://127.0.0.1:11434/api/' + path,
         data=json.dumps(data).encode() if data is not None else None,
         headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=timeout) as r:
+        if streaming:
+            parts = []
+            size = 0
+            for line in r:
+                jobs.check()
+                if not line.strip(): continue
+                chunk = json.loads(line)
+                if 'error' in chunk: raise ValueError('Das lokale Modell konnte die Anfrage nicht beenden.')
+                text = chunk.get('message', {}).get('content', '')
+                size += len(text)
+                if size > 20000: raise ValueError('Modellantwort ist zu lang.')
+                parts.append(text)
+                if chunk.get('done'): break
+            jobs.check()
+            return {'message': {'content': ''.join(parts)}}
         return json.load(r)
 
 class Handler(BaseHTTPRequestHandler):
@@ -53,14 +74,17 @@ class Handler(BaseHTTPRequestHandler):
         if not self.valid_host(): return self.reply(403, {'error': 'Ungültiger Host.'})
         path = self.path.split('?')[0]
         if path == '/api/session': return self.reply(200, {'token': TOKEN})
+        if path == '/api/maintenance': return self.reply(200, {'busy': jobs.is_busy()})
         if path == '/api/status':
             try:
                 names = [m['name'] for m in ollama('tags')['models']]
-                return self.reply(200, {'online': 'qwen3:1.7b' in names, 'model': 'qwen3:1.7b'})
+                return self.reply(200, {'online': 'qwen3:1.7b' in names, 'model': 'qwen3:1.7b', **diagnostics.status()})
             except Exception:
-                return self.reply(200, {'online': False, 'model': 'qwen3:1.7b'})
+                return self.reply(200, {'online': False, 'model': 'qwen3:1.7b', **diagnostics.status()})
         files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
         if path == '/organizer.js': files[path] = ('organizer.js', 'text/javascript; charset=utf-8')
+        if path == '/daily.js': files[path] = ('daily.js', 'text/javascript; charset=utf-8')
+        if path == '/daily.css': files[path] = ('daily.css', 'text/css; charset=utf-8')
         if path not in files: return self.reply(404, {'error': 'Nicht gefunden.'})
         name, mime = files[path]
         self.reply(200, (ROOT / 'web' / name).read_bytes(), mime)
@@ -72,11 +96,19 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get('Origin')
         if origin and origin not in ('http://localhost:8765', 'http://127.0.0.1:8765', 'https://' + HOST):
             return self.reply(403, {'error': 'Ungültiger Ursprung.'})
+        job = None
         try:
             length = int(self.headers.get('Content-Length', '0'))
             if not 0 < length <= 65536: return self.reply(400, {'error': 'Anfrage zu groß oder leer.'})
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict): raise ValueError('Ungültige Anfrage.')
+            if self.path == '/api/jobs/cancel': return self.reply(200, jobs.cancel(data.get('id')))
+            job = jobs.begin(data.get('_job'))
+            if self.path.startswith('/api/personal/'):
+                return self.reply(200, personal.handle(self.path, data))
+            if self.path.startswith('/api/assistant/'):
+                from assistant_actions import handle
+                return self.reply(200, handle(self.path, data, draft_text))
             if self.path.startswith(('/api/connections/', '/api/mail/', '/api/calendar/')):
                 from integrations import handle
                 return self.reply(200, handle(self.path, data, draft_text))
@@ -125,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
                     clean.append({'role': m['role'], 'content': m['content']})
                 if not CHAT_LOCK.acquire(blocking=False): return self.reply(429, {'error': 'Jarvis beantwortet gerade eine Nachricht. Bitte kurz warten.'})
                 try:
-                    result = ollama('chat', {'model': 'qwen3:1.7b', 'messages': [{'role': 'system', 'content': 'Du bist Jarvis. Antworte auf Deutsch. Beantworte die letzte Frage konkret und direkt; liefere die erbetene Information oder den gewünschten Text. Nutze den Gesprächsverlauf für Anschlussfragen. Nur wenn eine wesentliche Angabe fehlt, stelle eine gezielte Rückfrage. Antworte niemals nur mit einer Bestätigung oder mit "Wie kann ich helfen?", wenn bereits eine Frage gestellt wurde. Halte die Antwort normalerweise auf zwei bis fünf Sätze begrenzt. Du hast keine Werkzeuge und kannst im Chat keine Apps öffnen oder Notizen speichern.'}] + clean, 'stream': False, 'think': False, 'keep_alive': '5m', 'options': {'num_ctx': 4096, 'num_predict': 350, 'temperature': 0.35, 'repeat_penalty': 1.1}}, 180)
+                    result = ollama('chat', {'model': 'qwen3:1.7b', 'messages': [{'role': 'system', 'content': 'Du bist Jarvis. Antworte auf Deutsch. Beantworte die letzte Frage konkret und direkt; liefere die erbetene Information oder den gewünschten Text. Nutze den Gesprächsverlauf für Anschlussfragen. Nur wenn eine wesentliche Angabe fehlt, stelle eine gezielte Rückfrage. Antworte niemals nur mit einer Bestätigung oder mit "Wie kann ich helfen?", wenn bereits eine Frage gestellt wurde. Halte die Antwort normalerweise auf zwei bis fünf Sätze begrenzt. Du hast keine Werkzeuge und kannst im Chat keine Apps öffnen oder Notizen speichern.' + '\n' + personal.context()}] + clean, 'stream': False, 'think': False, 'keep_alive': '5m', 'options': {'num_ctx': 4096, 'num_predict': 350, 'temperature': 0.35, 'repeat_penalty': 1.1}}, 180)
                     return self.reply(200, {'message': result['message']['content']})
                 finally: CHAT_LOCK.release()
             self.reply(404, {'error': 'Nicht gefunden.'})
@@ -136,9 +168,12 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             print(type(e).__name__, str(e), flush=True)
             self.reply(500, {'error': 'Aktion fehlgeschlagen. Details stehen in jarvis.log.'})
+        finally:
+            jobs.finish(job)
 
 if __name__ == '__main__':
     server = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     print('Jarvis läuft auf http://127.0.0.1:8765', flush=True)
     server.serve_forever()
+
 

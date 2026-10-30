@@ -97,3 +97,59 @@ python3 -m unittest -v test_integrations.py test_integration_http.py
 
 Die echten Yahoo-/iCloud-Anmeldungen und der macOS-Schlüsselbund müssen nach der persönlichen Freigabe auf dem Mac geprüft werden. UI-Tests mit Testdaten bestätigen keine echte Anbieter-Verbindung.
 
+## Alltag 1: persönliche Bedienung
+
+Oben stehen nächster beziehungsweise laufender Termin, Anzahl der geladenen Mails zum Prüfen und offene Aufgaben. Der Chat ist wieder vor den ausführlichen Kalender-/Mailkarten angeordnet. Konten und persönliche Einstellungen bleiben einklappbar. Mails und die neuen Karten umbrechen lange Texte; die Mailfelder scrollen weiterhin nur vertikal.
+
+Unter „Verbindungen und Jarvis-Version“ stehen die tatsächlich gestartete Code-Version, die Git-Kennung beim Serverstart und das letzte Signal des Update-Diensts. „Kontoverbindungen prüfen“ testet die gespeicherte Yahoo-Anmeldung und die iCloud-Kalenderliste. Zeitstempel zeigen, wie aktuell das jeweilige Ergebnis ist; eine gespeicherte Anmeldung allein wird nicht als aktuelle Verbindungsprüfung ausgegeben.
+
+### Kalender im Gespräch und aus Mails
+
+Beispiele:
+
+- „Trag morgen um 15 Uhr einen Werkstatttermin ein.“
+- „Trag morgen um 15 Uhr bis 18 Uhr Kino in Kalender Privat ein.“
+- „Notiere als Aufgabe: morgen Werkstatt anrufen.“
+- „Merke dir: Ich bevorzuge kurze Antworten.“
+- „Welche Aufgaben sind offen?“
+- „Fasse meine wichtigen Mails zusammen.“
+
+Einfache Datums-/Uhrzeitangaben werden lokal ausgewertet; für komplexere Terminvorschläge kann das lokale Modell helfen. Ohne genannte Dauer werden 60 Minuten vorgeschlagen. Datum, Uhrzeit, Titel, Ort und Kalender bleiben im Formular prüf- und änderbar. Ein bevorzugter Kalender kann eingestellt werden; ein im Auftrag genannter Kalendername hat Vorrang. Unklare Daten sowie mehrdeutige/nicht existierende Uhrzeiten bei Zeitumstellungen werden zurückgewiesen.
+
+Eine neue Terminprüfung liest vorhandene Termine einschließlich des eingestellten Puffers vor und nach dem Termin. Transparente Ereignisse werden nicht als Belegung gewertet. Überschneidungen und unvollständige Abfragen werden sichtbar gemeldet; zum Übergehen muss das zusätzliche Kästchen ausdrücklich bestätigt werden. Vor dem tatsächlichen Speichern wird die Kalenderlage erneut geprüft. Hat sie sich verändert, ist eine neue Vorschau nötig. Ein Puffer ist eine feste Minutenangabe, keine berechnete Fahrzeit.
+
+In der ausgewählten Mail bereiten „Termin aus Mail vorschlagen“ und „Aufgabe aus Mail vorschlagen“ nur einen KI-Vorschlag aus dem vorhandenen Auszug vor. Mit der ursprünglichen Mail vergleichen; fehlende Informationen ergänzen. Keine automatische Speicherung und keine Einladungen. Aufgaben-/Gedächtnisvorschläge aus dem Chat benötigen ebenfalls eine ausdrückliche Bestätigung.
+
+### Persönliche Mailregeln und Entwürfe
+
+Die Einstellungen erlauben bis zu 30 genaue Absender beziehungsweise Domains (zum Beispiel `@beispiel.de`) und 30 Themenbegriffe. Diese Regeln heben passende Mails als „Deine Priorität“ hervor; sie verifizieren keine Absender und ersetzen keine Spam-/Phishingprüfung. Nach einer Änderung die Tagesübersicht erneut laden.
+
+Mailentwürfe berücksichtigen den gewählten Stil (freundlich, kurz, förmlich, locker) und optional eine ausdrücklich gespeicherte Signatur. Die Einzelmail- und Sammelzusammenfassungen werden lokal erzeugt und sind als KI-Zusammenfassungen erkennbar. Die Sammelzusammenfassung nutzt höchstens acht relevante, kürzlich geladene Auszüge aus den neuesten 20 Mails. Bei „heute“ wird zusätzlich das Datumsfeld der Mail in Berliner Zeit geprüft. Das ist keine Volltextsuche in der ganzen Mailbox. Lange Mails bekommen beim Öffnen zunächst eine Zusammenfassung; der verfügbare ursprüngliche Auszug bleibt aufklappbar. Es gibt weiterhin keinen automatischen Mailversand oder Lösch-/Verschiebevorgang.
+
+### Aufgaben, Gedächtnis und Stimme
+
+Aufgaben können mit Datum gespeichert, bearbeitet, erledigt und entfernt werden. Überfällige Aufgaben sind markiert. Diese Liste versendet noch keine automatischen Benachrichtigungen; Kalendererinnerungen sind davon unabhängig.
+
+Das Gedächtnis enthält ausschließlich ausdrücklich gespeicherte Informationen. Jeder Eintrag ist einsehbar, bearbeitbar und löschbar. Die letzten acht Einträge (zusammen begrenzt auf rund 2.100 Zeichen) können normalen lokalen Chatantworten als Hintergrund dienen. Es gibt kein unbemerktes Lernen aus der Mailbox.
+
+Aufgaben, Vorlieben und Erinnerungen liegen in `~/Library/Application Support/Jarvis/personal.json`, außerhalb des Git-Projekts und mit Dateirechten 0600. Zugangsdaten bleiben separat im Schlüsselbund. Diese neuen Funktionen benötigen keine weiteren Python-Pakete.
+
+Die beiden Sprachoptionen sind freiwillig und standardmäßig aus:
+- „Gesprochenen Text direkt senden“ sendet erst endgültig erkannten Text. Kalender-/Speichervorschläge bleiben bestätigungspflichtig.
+- „Antworten kürzer vorlesen“ begrenzt lange Sprachausgaben und verweist auf den vollständigen sichtbaren Text. Anna und die bisherige Stimmeinstellung bleiben erhalten.
+
+Längere Lese-, Kalenderprüf- und Modellanfragen zeigen ihren Zustand und sind abbrechbar. Der Browser beendet die Anfrage; der Server prüft das Abbruchsignal zwischen Netzwerkoperationen beziehungsweise Modell-Streamabschnitten. Eine bereits laufende einzelne Netzwerkanfrage kann bis zu ihrem Timeout weiterlaufen. Die eigentlichen Speicher-/Bestätigungsvorgänge sind bewusst nicht über den allgemeinen Abbrechen-Button abbrechbar.
+
+Der Update-Dienst schreibt nun bei jeder Prüfung ein aktuelles Statussignal und wartet auf laufende Jarvis-Anfragen. Beim Start der neuen Version kann er sich einmal selbst neu starten.
+
+### Prüfung
+
+```sh
+python3 -m unittest -v test_integrations.py test_integration_http.py test_auto_update.py test_daily.py
+node test_organizer.js
+node test_daily_ui.js
+```
+
+Die Tests verwenden temporäre Daten und nachgebildete Provider-/DOM-Antworten. Sie verändern keine echten Konten, Termine oder Mac-Apps. Ein echter visueller Safari-/iPhone-Durchlauf und echte Anbieteraktionen sind damit nicht bestätigt.
+
+

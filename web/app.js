@@ -2,11 +2,37 @@
 const $ = id => document.getElementById(id);
 let token, history = [], busy = false;
 const ready = fetch('/api/session').then(r => r.json()).then(d => token = d.token);
+const activeRequests = new Map();
+function requestProgress(){
+  const panel=$('request-progress');if(!panel)return;
+  panel.hidden=activeRequests.size===0;
+  if(activeRequests.size)$('request-status').textContent=Array.from(activeRequests.values()).map(v=>v.label).join(' · ');
+}
+function requestLabel(path){
+  if(path==='/api/chat')return 'Jarvis formuliert eine Antwort …';
+  if(path.includes('/mail/'))return 'Mails werden gelesen oder zusammengefasst …';
+  if(path.includes('/calendar/'))return 'Kalender wird geprüft …';
+  if(path.includes('/assistant/'))return 'Dein Vorschlag wird vorbereitet …';
+  return 'Verbindungen werden geprüft …';
+}
 async function api(path, data) {
   await ready; token=(await (await fetch('/api/session')).json()).token;
-  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json','X-Jarvis-Token':token}, body:JSON.stringify(data)});
-  const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Anfrage fehlgeschlagen.'); return d;
+  const cancellable=path==='/api/chat'||path.startsWith('/api/mail/')||['/api/calendar/list','/api/calendar/today','/api/calendar/preview','/api/connections/test','/api/assistant/plan','/api/assistant/mail-event','/api/assistant/mail-task'].includes(path);
+  const id=cancellable?Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''):null;
+  const controller=new AbortController();
+  if(id){activeRequests.set(id,{controller,label:requestLabel(path)});requestProgress();}
+  try{
+    const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json','X-Jarvis-Token':token}, body:JSON.stringify(id?{...data,_job:id}:data),signal:controller.signal});
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Anfrage fehlgeschlagen.'); return d;
+  }catch(error){if(error.name==='AbortError')throw new Error('Anfrage abgebrochen.');throw error;}
+  finally{if(id){activeRequests.delete(id);requestProgress();}}
 }
+if($('cancel-requests'))$('cancel-requests').onclick=()=>{
+  for(const [id,request]of activeRequests){
+    request.controller.abort();
+    fetch('/api/jobs/cancel',{method:'POST',headers:{'Content-Type':'application/json','X-Jarvis-Token':token},body:JSON.stringify({id})}).catch(()=>{});
+  }
+};
 const settings = {get(key, fallback='') {try{return localStorage.getItem('jarvis.'+key) || fallback;}catch{return fallback;}},set(key,value){try{localStorage.setItem('jarvis.'+key,value);}catch{}}};
 let voices = [], utterance, audioURL, speechRequest, speechID=0, audioContext, audioSource;
 function unlockSound() {
@@ -41,9 +67,10 @@ $('voice').onchange = () => settings.set('voiceAnnaV1',$('voice').value);
 $('rate').oninput = () => {$('rate-value').value=$('rate').value; settings.set('rateVictoria',$('rate').value);};
 if(window.speechSynthesis){loadVoices(); speechSynthesis.addEventListener('voiceschanged',loadVoices);}
 async function speak(text) {
+  if($('voice-short')?.checked&&text.length>700){const excerpt=text.slice(0,640);text=excerpt.slice(0,excerpt.lastIndexOf(' '))+'. Den vollständigen Text siehst du in Jarvis.';}
   unlockSound();
   if (['neural','clone'].includes($('voice').value)) {
-    recognition?.abort(); stopAudio(); const id=speechID; speechRequest=new AbortController();
+    allowAutoSend=false;recognition?.abort(); stopAudio(); const id=speechID; speechRequest=new AbortController();
     const selectedVoice=$('voice').value; $('speech-status').textContent=selectedVoice==='clone'?'Deine Stimme wird lokal erzeugt. Das kann etwas dauern …':'Victoria wird lokal erzeugt …';
     try {
       await ready; token=(await (await fetch('/api/session')).json()).token;
@@ -66,7 +93,7 @@ async function speak(text) {
   }
   stopAudio();
   if (!window.speechSynthesis) { $('notice').textContent = 'Dieser Browser unterstützt kein Vorlesen.'; return; }
-  recognition?.abort();
+  allowAutoSend=false;recognition?.abort();
   speechSynthesis.cancel();
   utterance = new SpeechSynthesisUtterance(text.replace(/\*\*|__|`|^#{1,6}\s/gm,'').replace(/https?:\/\/\S+/g,'Link'));
   utterance.lang = 'de-DE'; utterance.rate = Number($('rate').value); utterance.pitch=1;
@@ -80,14 +107,17 @@ async function speak(text) {
 }
 $('voice-test').onclick=()=>speak('Hallo, ich bin Jarvis. Erzähl mir, was du vorhast. Wenn mir etwas unklar ist, frage ich nach.');
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null, listening = false, beforeDictation = '';
+let recognition = null, listening = false, beforeDictation = '', dictationFinal=false, allowAutoSend=false;
+for(const [id,key]of [['voice-auto-send','voiceAutoSend'],['voice-short','voiceShort']]){
+  if($(id)){$(id).checked=settings.get(key,'off')==='on';$(id).onchange=()=>settings.set(key,$(id).checked?'on':'off');}
+}
 if (Recognition) {
   recognition = new Recognition(); recognition.lang='de-DE'; recognition.interimResults=true; recognition.continuous=false;
   recognition.onstart=()=>{coreState('listening');listening=true; $('dictate').textContent='■ Aufnahme beenden'; $('dictate').setAttribute('aria-pressed','true'); $('speech-status').textContent='Ich höre zu …';};
-  recognition.onresult=e=>{let text='';for(let i=0;i<e.results.length;i++)text+=e.results[i][0].transcript+' '; $('prompt').value=(beforeDictation+' '+text).trim().slice(0,8000);};
-  recognition.onerror=e=>{$('speech-status').textContent=e.error==='not-allowed'?'Mikrofon oder Spracherkennung nicht freigegeben. Du kannst weiter tippen.':'Spracheingabe nicht verfügbar ('+e.error+'). Bitte erneut versuchen oder tippen.';};
-  recognition.onend=()=>{if(!busy)coreState('ready');listening=false; $('dictate').textContent='🎙 Nachricht sprechen'; $('dictate').setAttribute('aria-pressed','false'); if($('speech-status').textContent==='Ich höre zu …')$('speech-status').textContent='Text prüfen und auf Senden tippen.';};
-  $('dictate').onclick=()=>{if(listening){recognition.stop();return;} if(busy)return; stopAudio(); beforeDictation=$('prompt').value; try{recognition.start();}catch{$('speech-status').textContent='Bitte kurz warten und erneut antippen.';}};
+  recognition.onresult=e=>{let text='';for(let i=0;i<e.results.length;i++){text+=e.results[i][0].transcript+' ';if(e.results[i].isFinal)dictationFinal=true;} $('prompt').value=(beforeDictation+' '+text).trim().slice(0,8000);};
+  recognition.onerror=e=>{allowAutoSend=false;$('speech-status').textContent=e.error==='not-allowed'?'Mikrofon oder Spracherkennung nicht freigegeben. Du kannst weiter tippen.':'Spracheingabe nicht verfügbar ('+e.error+'). Bitte erneut versuchen oder tippen.';};
+  recognition.onend=()=>{if(!busy)coreState('ready');listening=false; $('dictate').textContent='🎙 Nachricht sprechen'; $('dictate').setAttribute('aria-pressed','false'); if($('speech-status').textContent==='Ich höre zu …')$('speech-status').textContent='Text prüfen und auf Senden tippen.';const send=allowAutoSend&&dictationFinal&&$('voice-auto-send')?.checked&&!busy&&$('prompt').value.trim();allowAutoSend=false;if(send)$('chat-form').requestSubmit();};
+  $('dictate').onclick=()=>{if(listening){recognition.stop();return;} if(busy)return; stopAudio(); beforeDictation=$('prompt').value;dictationFinal=false;allowAutoSend=true; try{recognition.start();}catch{allowAutoSend=false;$('speech-status').textContent='Bitte kurz warten und erneut antippen.';}};
 } else {$('dictate').disabled=true; $('speech-status').textContent='Hier ist keine Browser-Spracheingabe verfügbar. Nutze das Mikrofon deiner Tastatur oder Safari.';}
 function add(role, text) {
   const el = document.createElement('article'); el.className = 'message ' + role;
@@ -97,7 +127,7 @@ function add(role, text) {
 }
 $('chat-form').onsubmit = async e => {
   e.preventDefault(); const text = $('prompt').value.trim(); if (!text || busy) return;
-  unlockSound(); recognition?.abort(); stopAudio(); coreState('thinking'); busy = true; $('dictate').disabled=true; $('send').disabled = true; $('clear').disabled = true; $('send').textContent = 'Denkt …';
+  unlockSound(); allowAutoSend=false;recognition?.abort(); stopAudio(); coreState('thinking'); busy = true; $('dictate').disabled=true; $('send').disabled = true; $('clear').disabled = true; $('send').textContent = 'Denkt …';
   add('user', text); $('prompt').value = ''; history.push({role:'user',content:text});
   try { const organizerText = typeof organizerAnswer === 'function' ? await organizerAnswer(text) : null; const d = organizerText === null ? await api('/api/chat',{messages:history.slice(-16)}) : {message:organizerText}; history.push({role:'assistant',content:d.message}); add('assistant',d.message); if($('auto-speak').checked) speak(d.message); else $('speech-status').textContent='Ton ist ausgeschaltet. Aktiviere „Antworten vorlesen“ oder tippe auf „Vorlesen“.'; }
   catch(err) {add('assistant',err.message); history.pop();}
@@ -108,7 +138,8 @@ for(const b of document.querySelectorAll('[data-action]')) b.onclick = async () 
 $('save-note').onclick = async () => {const b=$('save-note'); b.disabled=true; try{$('notice').textContent=(await api('/api/action',{action:'notiz',text:$('note').value})).message; $('note').value='';}catch(e){$('notice').textContent=e.message;}finally{b.disabled=false;}};
 $('stop-speak').onclick = () => {stopAudio(); $('speech-status').textContent='Vorlesen gestoppt.';};
 $('clear').onclick = () => {history=[]; $('messages').replaceChildren(); stopAudio();};
-async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● Modell bereit':'○ Ollama prüfen';}catch{$('status').textContent='○ Verbindung unterbrochen';}}
+async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● Modell bereit':'○ Ollama prüfen';if(typeof renderRuntimeStatus==='function')renderRuntimeStatus(d);}catch{$('status').textContent='○ Verbindung unterbrochen';}}
 status(); setInterval(status,30000);
 if(!window.speechSynthesis){for(const [value,label] of [['clone','Eigene Stimme · KI-Klon (lokal)'],['neural','Victoria · Weiblich / Kokoro (lokal)']]){const o=document.createElement('option');o.value=value;o.textContent=label;$('voice').append(o);} $('voice').value='clone';}
+
 

@@ -9,6 +9,8 @@
 *credentials*
 *secrets*
 config.local.json
+personal.json
+update-status.json
 README.local.md
 Notizen/
 notes/
@@ -36,3 +38,4 @@ __pycache__/
 .codex/
 .agents/
 .publish/
+

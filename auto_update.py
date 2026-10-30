@@ -82,6 +82,14 @@ def healthy():
         return False
 
 
+def runtime_busy():
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:8765/api/maintenance', timeout=2) as response:
+            return json.load(response).get('busy') is not False
+    except Exception:
+        return True
+
+
 def port_busy():
     import socket
     with socket.socket() as sock:
@@ -163,8 +171,18 @@ def main():
             if time.monotonic() >= next_check:
                 next_check = time.monotonic() + 60
                 try:
+                    if runtime_busy():
+                        status('Updates warten auf laufende Jarvis-Anfragen.')
+                        continue
                     old, new = candidate()
+                    if new == old:
+                        status('Automatische Updates aktiv. Keine neue Version.', version=old)
+                    elif new == rejected:
+                        status('Automatische Updates aktiv. Fehlerhafte Version wird übersprungen.', version=old, rejected=new)
                     if new != old and new != rejected:
+                        if runtime_busy():
+                            status('Neue Version gefunden; warte auf laufende Jarvis-Anfragen.')
+                            continue
                         git('merge', '--ff-only', new)
                         stop_server(proc)
                         proc = start_server()
@@ -197,3 +215,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

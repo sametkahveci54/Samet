@@ -1,7 +1,7 @@
 'use strict';
 // Uses api() and speak() from app.js; account secrets are never persisted in the browser.
-let inbox = [], chosenMail = null, previewToken = null, dayText = '';
-const labels = {pruefen:'Prüfen · möglicherweise wichtig',werbung:'Vermutlich Werbung',sonstige:'Sonstige'};
+let inbox = [], chosenMail = null, previewToken = null, dayText = '', previewNeedsAcknowledgement=false;
+const labels = {prioritaet:'Deine Priorität',pruefen:'Prüfen · möglicherweise wichtig',werbung:'Vermutlich Werbung',sonstige:'Sonstige'};
 const berlinDate = value => new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
 const berlinTime = value => new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',hour:'2-digit',minute:'2-digit'}).format(new Date(value));
 const berlinDay = value => new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
@@ -31,6 +31,7 @@ async function loadCalendars(){
     const option=node('option',calendar.name);option.value=calendar.id;select.append(option);
   }
   if(select.options.length===1)$('event-status').textContent='Kein beschreibbarer Kalender gefunden. Bitte iCloud-Freigaben prüfen.';
+  if(typeof calendarChoices==='function')calendarChoices(data.calendars);
 }
 for(const provider of ['yahoo','icloud']){
   $(provider+'-connect').onsubmit=async event=>{
@@ -70,6 +71,7 @@ function renderMail(){
       $('mail-snippet').textContent=mail.snippet||'Kein lesbarer Textauszug vorhanden.';
       $('mail-partial').textContent='Textauszug, keine Anhänge. '+(mail.partial?'Nachricht wurde nur teilweise geladen. ':'')+'Einordnung: '+mail.reason+'. Absenderangaben können gefälscht sein.';
       $('reply-draft').value='';$('reply-instruction').value='';$('draft-status').textContent='';
+      if(typeof selectMailExtras==='function')selectMailExtras(mail);
     };
     $('mail-list').append(button);
   }
@@ -97,11 +99,12 @@ async function refreshDay(){
   }else{$('calendar-status').textContent=results[0].reason.message;parts.push('Kalender konnte nicht geladen werden.');}
   if(results[1].status==='fulfilled'){
     const data=results[1].value;inbox=data.messages;$('mail-status').textContent=data.note;renderMail();
-    parts.push('Von den '+inbox.length+' neuesten Mails sind '+inbox.filter(m=>m.category==='pruefen').length+' zum Prüfen und '+inbox.filter(m=>m.category==='werbung').length+' vermutlich Werbung.');
+    parts.push('Von den '+inbox.length+' neuesten Mails sind '+inbox.filter(m=>['prioritaet','pruefen'].includes(m.category)).length+' zum Prüfen und '+inbox.filter(m=>m.category==='werbung').length+' vermutlich Werbung.');
   }else{$('mail-status').textContent=results[1].reason.message;parts.push('Mails konnten nicht geladen werden.');}
   dayText=parts.join(' ');$('day-speak').disabled=false;
   $('organizer-status').textContent='Übersicht aktualisiert. Mail-Einordnung ist eine Hilfestellung. Einzelheiten stehen darunter.';
   button.disabled=false;
+  if(typeof dayMetrics==='function')dayMetrics(results);
 }
 $('day-refresh').onclick=refreshDay;
 $('day-speak').onclick=()=>speak(dayText);
@@ -120,7 +123,7 @@ $('draft-copy').onclick=async()=>{
   try{await navigator.clipboard.writeText($('reply-draft').value);$('draft-status').textContent='Entwurf kopiert. In deiner Mail-App in die Antwort einfügen.';}
   catch{$('reply-draft').focus();$('reply-draft').select();$('draft-status').textContent='Bitte den markierten Entwurf manuell kopieren.';}
 };
-function cancelPreview(){previewToken=null;$('event-preview').hidden=true;$('event-confirm').disabled=false;}
+function cancelPreview(){previewToken=null;previewNeedsAcknowledgement=false;$('event-preview').hidden=true;$('event-confirm').disabled=false;if($('conflict-ack'))$('conflict-ack').checked=false;}
 $('event-form').oninput=cancelPreview;
 $('event-cancel').onclick=cancelPreview;
 $('event-form').onsubmit=async event=>{
@@ -131,6 +134,8 @@ $('event-form').onsubmit=async event=>{
       location:$('event-location').value,start:new Date($('event-start').value).toISOString(),
       end:new Date($('event-end').value).toISOString(),reminder:Number($('event-reminder').value)});
     previewToken=data.confirmation;const item=data.event;
+    previewNeedsAcknowledgement=Boolean(item.conflicts?.length||item.conflict_warnings?.length);
+    if(typeof conflictPreview==='function')conflictPreview(item);
     $('event-preview-text').textContent=item.title+' · '+berlinDate(item.start)+' bis '+berlinDate(item.end)+
       ' (Berliner Zeit) · Kalender: '+item.calendar+(item.location?' · Ort: '+item.location:'')+
       ' · '+(item.reminder?'Erinnerung '+item.reminder+' Minuten vorher.':'Keine Erinnerung.');
@@ -139,9 +144,11 @@ $('event-form').onsubmit=async event=>{
   finally{button.disabled=false;}
 };
 $('event-confirm').onclick=async()=>{
-  if(!previewToken)return;const confirmation=previewToken;previewToken=null;
+  if(!previewToken)return;
+  if(previewNeedsAcknowledgement&&!$('conflict-ack').checked){$('event-status').textContent='Bitte die Überschneidungen ausdrücklich bestätigen.';return;}
+  const confirmation=previewToken;previewToken=null;
   $('event-confirm').disabled=true;$('event-status').textContent='Termin wird in iCloud gespeichert …';
-  try{const data=await api('/api/calendar/create',{confirmation});$('event-status').textContent=data.message;cancelPreview();$('event-form').reset();}
+  try{const data=await api('/api/calendar/create',{confirmation,ack_conflicts:$('conflict-ack')?.checked===true});$('event-status').textContent=data.message;cancelPreview();$('event-form').reset();}
   catch(error){$('event-status').textContent=error.message;cancelPreview();}
 };
 $('new-event').ontoggle=()=>{if($('new-event').open)loadCalendars().catch(error=>$('event-status').textContent=error.message);};
@@ -149,6 +156,7 @@ connectionStatus().then(status=>{if(status.icloud.connected)return loadCalendars
   .catch(error=>$('organizer-status').textContent=error.message);
 
 async function organizerAnswer(text){
+  if(typeof dailyAnswer==='function'){const answer=await dailyAnswer(text);if(answer!==null)return answer;}
   if(!/\bheute\b/i.test(text)||!/(termine?|kalender|steht.*an|ansteht|tagesübersicht|tagesplan)/i.test(text))return null;
   const data=await api('/api/calendar/today',{});
   const now=Date.now();
@@ -160,3 +168,4 @@ async function organizerAnswer(text){
   if(data.warnings.length)lines.push('Achtung: '+data.warnings.join(' '));
   return lines.join('\n');
 }
+
