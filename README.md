@@ -153,3 +153,12 @@ node test_daily_ui.js
 Die Tests verwenden temporäre Daten und nachgebildete Provider-/DOM-Antworten. Sie verändern keine echten Konten, Termine oder Mac-Apps. Ein echter visueller Safari-/iPhone-Durchlauf und echte Anbieteraktionen sind damit nicht bestätigt.
 
 
+
+
+### Marin · Professional (optionale Online-Stimme)
+
+Unter „Marin · Professional einrichten“ einen eigenen OpenAI-API-Schlüssel hinterlegen und die kostenpflichtige Übertragung vorgelesener Texte ausdrücklich freigeben. Der Schlüssel bleibt im macOS-Schlüsselbund, wird nie an den Browser zurückgegeben und gehört weder in Git noch in den Chat. API-Abrechnung/Guthaben separat im OpenAI-Konto einrichten; ChatGPT Plus deckt sie nicht ab. Speichern ruft noch keine kostenpflichtige Sprachgenerierung auf. Anschließend „Stimme testen“ antippen. Auf weiteren Geräten Marin im Stimmenmenü auswählen. Anna bleibt verfügbar.
+
+Das Backend verwendet gpt-4o-mini-tts mit Marin und einer professionellen, ruhigen Sprech-Anweisung. Das ist eine Stilvorgabe, keine Garantie für identische Betonung wie in der Demo. Audio kommt als PCM-Stream (24 kHz, 16 Bit, mono) und wird im Browser während des Empfangs abgespielt. Ton am iPhone gegebenenfalls zuerst mit „Ton aktivieren“ freigeben. Stoppen bricht den Abruf ab; bereits erzeugtes Audio kann trotzdem abgerechnet werden. Die zuletzt vollständig erzeugte Aufnahme bleibt nur im Arbeitsspeicher der Seite und kann ohne neue API-Anfrage erneut abgespielt werden. Es gibt keine automatischen kostenpflichtigen Wiederholungsversuche. Schlüssel entfernen deaktiviert neue Online-Generierung; der Schlüssel kann zusätzlich im OpenAI-Konto widerrufen werden.
+
+Offline geprüft: Schlüssel-/Fehlerbehandlung, Token-Schutz, PCM-Übertragung und Wiedergabe mit ungeraden Netzwerkpaketen, Abbruch aller eingeplanten Audioquellen und Wiederverwendung der letzten Aufnahme. Echte Sprachgenerierung und Safari-/iPhone-Audiowiedergabe müssen nach Einrichtung mit dem eigenen API-Konto getestet werden.

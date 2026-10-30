@@ -29,6 +29,7 @@ class Element{
  async function fetch(url,options={}){
   const data=options.body?JSON.parse(options.body):{};calls.push({path:url,data:clone(data)});
   let value={};
+  if(url==='/api/speech'){let n=0;return {ok:true,body:{getReader:()=>({read:async()=>n++<2?{done:false,value:new Uint8Array([0,1,2])}:{done:true},cancel:async()=>{}})}};}
   if(url==='/api/session')value={token:'test-token'};
   else if(url==='/api/status')value={online:true,version:'Alltag Test',revision:'12345678',updater:{fresh:true,message:'Updates aktiv'},connections:{}};
   else if(url==='/api/connections/status')value={yahoo:{connected:true,email:'test@yahoo.com'},icloud:{connected:true,email:'test@icloud.com'}};
@@ -51,12 +52,14 @@ class Element{
  }
  const speech={getVoices:()=>[{name:'Anna',lang:'de-DE',voiceURI:'anna-native',localService:true}],addEventListener(){},cancel(){},speak(value){spoken.push(value.text);}};
  class Recognition{start(){this.onstart?.();}stop(){this.onend?.();}abort(){}}
- const context=vm.createContext({console,crypto:webcrypto,Uint8Array,AbortController,DOMException,Intl,Date,Promise,URL,
+ const sources=[];
+ class AudioContext{constructor(){this.state='running';this.currentTime=0;this.destination={};}resume(){return Promise.resolve();}createBuffer(channels,count,rate){return {duration:count/rate,getChannelData:()=>new Float32Array(count)};}createBufferSource(){const source={connect(){},start(){},stop(){this.stopped=true;}};sources.push(source);return source;}}
+ const context=vm.createContext({console,crypto:webcrypto,Uint8Array,Blob,AbortController,DOMException,Intl,Date,Promise,URL,
   document:{getElementById:get,createElement:tag=>new Element(tag),createTextNode:text=>String(text),querySelectorAll:()=>[],body:new Element('body')},
-  window:{speechSynthesis:speech,SpeechRecognition:Recognition},speechSynthesis:speech,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},
+  window:{AudioContext,speechSynthesis:speech,SpeechRecognition:Recognition},speechSynthesis:speech,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},
   navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value)},
   fetch,setInterval(){},matchMedia:()=>({matches:false})});
- for(const script of ['web/app.js','web/organizer.js','web/daily.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
+ for(const script of ['web/app.js','web/online-voice.js','web/organizer.js','web/daily.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
  const flush=async()=>{for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));};
  await flush();assert(get('system-version').textContent.includes('Alltag Test'));
  get('mail-filter').value='alle';await get('open-overview').onclick();assert(get('priority-count').textContent.includes('1 von 1'));
@@ -84,5 +87,11 @@ class Element{
  assert(calls.some(c=>c.path==='/api/chat'&&c.data.messages.at(-1).content==='Hallo'));
  get('voice-short').checked=true;vm.runInContext('speak("Lange Antwort. ".repeat(100))',context);
  assert(spoken.at(-1).length<800);assert(spoken.at(-1).includes('vollständigen Text'));
+ await vm.runInContext('speakMarin("Hallo Samet.")',context);
+ assert.equal(sources.length,2,'Odd PCM chunks are joined and scheduled as they arrive');
+ const billed=calls.filter(c=>c.path==='/api/speech').length;
+ await vm.runInContext('speakMarin("Hallo Samet.")',context);
+ assert.equal(calls.filter(c=>c.path==='/api/speech').length,billed,'Replay must not generate paid audio again');
+ assert(sources.every(source=>source.stopped),'Stop/replay stops every queued audio source');
  console.log('All UI scripts: startup/status, inbox summary, local tasks, explicit memory/event confirmation, conflict acknowledgment, cancellation and opt-in voice sending: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});

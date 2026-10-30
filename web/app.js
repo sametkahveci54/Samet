@@ -47,28 +47,29 @@ $('enable-sound').onclick=()=>{unlockSound(); $('auto-speak').checked=true;setti
 
 const player = document.createElement('audio'); player.controls=true; player.hidden=true; player.setAttribute('aria-label','Jarvis Sprachausgabe'); $('speech-status').after(player);
 function coreState(state) {document.body.dataset.state=state; $('core-state').textContent=({ready:'BEREIT FÜR DEIN SIGNAL',thinking:'GEDANKEN WERDEN VERKNÜPFT',speaking:'SPRACHAUSGABE AKTIV',listening:'ICH HÖRE DIR ZU'})[state];}
-function stopAudio(){speechID++; if(audioSource){audioSource.onended=null;try{audioSource.stop();}catch{}audioSource=null;} speechRequest?.abort(); player.pause(); if(audioURL){URL.revokeObjectURL(audioURL);audioURL=null;} player.removeAttribute('src'); player.hidden=true; window.speechSynthesis?.cancel(); coreState('ready');}
-player.onplay=()=>{if(audioSource){audioSource.onended=null;try{audioSource.stop();}catch{}audioSource=null;}coreState('speaking');}; player.onended=()=>{coreState('ready'); $('speech-status').textContent='Du bist dran.';}; player.onpause=()=>{if(!busy)coreState('ready');};
+function stopAudio(){speechID++; if(typeof stopOnlineSpeech==='function')stopOnlineSpeech(); if(audioSource){audioSource.onended=null;try{audioSource.stop();}catch{}audioSource=null;} speechRequest?.abort(); player.pause(); if(audioURL){URL.revokeObjectURL(audioURL);audioURL=null;} player.removeAttribute('src'); player.hidden=true; window.speechSynthesis?.cancel(); coreState('ready');}
+player.onplay=()=>{if(typeof stopOnlineSpeech==='function')stopOnlineSpeech();if(audioSource){audioSource.onended=null;try{audioSource.stop();}catch{}audioSource=null;}coreState('speaking');}; player.onended=()=>{coreState('ready'); $('speech-status').textContent='Du bist dran.';}; player.onpause=()=>{if(!busy)coreState('ready');};
 
 $('rate').value = settings.get('rateVictoria','1.0');
 $('rate-value').value = $('rate').value;
 function loadVoices() {
-  if (!window.speechSynthesis) return;
-  voices = speechSynthesis.getVoices().filter(v => /^de[-_]/i.test(v.lang));
+  voices = (window.speechSynthesis?.getVoices() || []).filter(v => /^de[-_]/i.test(v.lang));
   const score = v => (/premium|enhanced|verbessert|siri|neural/i.test(v.name)?100:0) + (/anna|markus|petra|yannick|viktor/i.test(v.name)?20:0) + (v.localService?5:0);
   voices.sort((a,b) => score(b)-score(a));
   const chosen = $('voice').value || settings.get('voiceAnnaV1','anna');
   $('voice').replaceChildren(); const own=document.createElement('option');own.value='clone';own.textContent='Eigene Stimme · KI-Klon (lokal)';$('voice').append(own); const neural=document.createElement('option'); neural.value='neural'; neural.textContent='Victoria · Weiblich / Kokoro (lokal)'; $('voice').append(neural);
+  const marin=document.createElement('option');marin.value='marin';marin.textContent='Marin · Professional (OpenAI · kostenpflichtig)';$('voice').append(marin);
   for (const v of voices) {const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=v.name + (v.localService?' · auf dem Gerät':' · Online-Stimme'); $('voice').append(o);}
   if(!voices.length){const o=document.createElement('option');o.value='anna';o.textContent='Anna · Systemstimme wird geladen …';$('voice').append(o);}
-  if(chosen==='anna'){const anna=voices.find(v=>/^anna(?:\s|$)/i.test(v.name));$('voice').value=anna?anna.voiceURI:(!voices.length?'anna':'neural');if(voices.length&&!anna)$('speech-status').textContent='Anna ist auf diesem Gerät nicht verfügbar. Victoria ist als Alternative ausgewählt.';} else if(chosen==='clone' || chosen==='neural' || voices.some(v=>v.voiceURI===chosen)) $('voice').value=chosen;
+  if(chosen==='anna'){const anna=voices.find(v=>/^anna(?:\s|$)/i.test(v.name));$('voice').value=anna?anna.voiceURI:(!voices.length?'anna':'neural');if(voices.length&&!anna)$('speech-status').textContent='Anna ist auf diesem Gerät nicht verfügbar. Victoria ist als Alternative ausgewählt.';} else if(chosen==='marin' || chosen==='clone' || chosen==='neural' || voices.some(v=>v.voiceURI===chosen)) $('voice').value=chosen;
 }
 $('voice').onchange = () => settings.set('voiceAnnaV1',$('voice').value);
 $('rate').oninput = () => {$('rate-value').value=$('rate').value; settings.set('rateVictoria',$('rate').value);};
-if(window.speechSynthesis){loadVoices(); speechSynthesis.addEventListener('voiceschanged',loadVoices);}
+loadVoices(); window.speechSynthesis?.addEventListener('voiceschanged',loadVoices);
 async function speak(text) {
   if($('voice-short')?.checked&&text.length>700){const excerpt=text.slice(0,640);text=excerpt.slice(0,excerpt.lastIndexOf(' '))+'. Den vollständigen Text siehst du in Jarvis.';}
   unlockSound();
+  if($('voice').value==='marin'){await speakMarin(text);return;}
   if (['neural','clone'].includes($('voice').value)) {
     allowAutoSend=false;recognition?.abort(); stopAudio(); const id=speechID; speechRequest=new AbortController();
     const selectedVoice=$('voice').value; $('speech-status').textContent=selectedVoice==='clone'?'Deine Stimme wird lokal erzeugt. Das kann etwas dauern …':'Victoria wird lokal erzeugt …';

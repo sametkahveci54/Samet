@@ -85,6 +85,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/organizer.js': files[path] = ('organizer.js', 'text/javascript; charset=utf-8')
         if path == '/daily.js': files[path] = ('daily.js', 'text/javascript; charset=utf-8')
         if path == '/daily.css': files[path] = ('daily.css', 'text/css; charset=utf-8')
+        if path == '/online-voice.js': files[path] = ('online-voice.js', 'text/javascript; charset=utf-8')
         if path not in files: return self.reply(404, {'error': 'Nicht gefunden.'})
         name, mime = files[path]
         self.reply(200, (ROOT / 'web' / name).read_bytes(), mime)
@@ -104,6 +105,9 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(data, dict): raise ValueError('Ungültige Anfrage.')
             if self.path == '/api/jobs/cancel': return self.reply(200, jobs.cancel(data.get('id')))
             job = jobs.begin(data.get('_job'))
+            if self.path == '/api/voice/config':
+                from online_voice import configure
+                return self.reply(200, configure(data))
             if self.path.startswith('/api/personal/'):
                 return self.reply(200, personal.handle(self.path, data))
             if self.path.startswith('/api/assistant/'):
@@ -135,6 +139,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not VOICE_LOCK.acquire(blocking=False):
                     return self.reply(429, {'error': 'Stimme wird gerade erzeugt. Bitte kurz warten.'})
                 try:
+                    if data.get('voice') == 'marin':
+                        from online_voice import open_audio, stream_audio
+                        with open_audio(text, rate) as response:
+                            stream_audio(self, response)
+                        return
                     if data.get('voice', 'neural') == 'clone':
                         if len(text) > 2400: raise ValueError('Für die eigene Stimme bitte maximal 2.400 Zeichen auf einmal vorlesen.')
                         from clone_client import CloneClient

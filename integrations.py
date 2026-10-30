@@ -99,7 +99,9 @@ class Keychain:
             getattr(self.sec, name).restype = C.c_int32
 
     def find(self, provider, read=True):
-        service = ('de.samet.jarvis.' + provider_name(provider)).encode()
+        if provider not in ('yahoo', 'icloud', 'openai'):
+            raise ValueError('Ungültiger Schlüsselbund-Eintrag.')
+        service = ('de.samet.jarvis.' + provider).encode()
         account = b'connection'
         length, data, item = C.c_uint32(), C.c_void_p(), C.c_void_p()
         code = self.sec.SecKeychainFindGenericPassword(None, len(service), service,

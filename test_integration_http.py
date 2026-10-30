@@ -1,4 +1,5 @@
 import http.client
+import io
 import json
 import threading
 import unittest
@@ -8,6 +9,20 @@ import server
 
 
 class HTTPTests(unittest.TestCase):
+    def test_online_voice_endpoints_require_session_token(self):
+        for path, data in [('/api/voice/config', {'action': 'status'}),
+                           ('/api/speech', {'voice': 'marin', 'text': 'Hallo', 'rate': 1})]:
+            status, _ = self.request('POST', path, data)
+            self.assertEqual(status, 403)
+
+    def test_marin_stream_is_binary_and_uses_existing_auth(self):
+        with patch('online_voice.open_audio', return_value=io.BytesIO(b'\x00\x01' * 9000)) as audio:
+            status, body = self.request('POST', '/api/speech',
+                {'voice': 'marin', 'text': 'Hallo Samet', 'rate': 1}, token=server.TOKEN)
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b'\x00\x01' * 9000)
+        audio.assert_called_once_with('Hallo Samet', 1)
+
     @classmethod
     def setUpClass(cls):
         cls.http=server.ThreadingHTTPServer(('127.0.0.1',0),server.Handler)
@@ -49,3 +64,4 @@ class HTTPTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
