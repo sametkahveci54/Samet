@@ -114,7 +114,7 @@ Beispiele:
 - „Welche Aufgaben sind offen?“
 - „Fasse meine wichtigen Mails zusammen.“
 
-Einfache Datums-/Uhrzeitangaben werden lokal ausgewertet; für komplexere Terminvorschläge kann das lokale Modell helfen. Ohne genannte Dauer werden 60 Minuten vorgeschlagen. Datum, Uhrzeit, Titel, Ort und Kalender bleiben im Formular prüf- und änderbar. Ein bevorzugter Kalender kann eingestellt werden; ein im Auftrag genannter Kalendername hat Vorrang. Unklare Daten sowie mehrdeutige/nicht existierende Uhrzeiten bei Zeitumstellungen werden zurückgewiesen.
+Einfache Datums-/Uhrzeitangaben werden lokal ausgewertet; für komplexere Terminvorschläge kann das lokale Modell helfen. Ohne genannte Dauer werden 15 Minuten vorgeschlagen. Datum, Uhrzeit, Titel, Ort und Kalender bleiben im Formular prüf- und änderbar. Ein bevorzugter Kalender kann eingestellt werden; ein im Auftrag genannter Kalendername hat Vorrang. Unklare Daten sowie mehrdeutige/nicht existierende Uhrzeiten bei Zeitumstellungen werden zurückgewiesen.
 
 Eine neue Terminprüfung liest vorhandene Termine einschließlich des eingestellten Puffers vor und nach dem Termin. Transparente Ereignisse werden nicht als Belegung gewertet. Überschneidungen und unvollständige Abfragen werden sichtbar gemeldet; zum Übergehen muss das zusätzliche Kästchen ausdrücklich bestätigt werden. Vor dem tatsächlichen Speichern wird die Kalenderlage erneut geprüft. Hat sie sich verändert, ist eine neue Vorschau nötig. Ein Puffer ist eine feste Minutenangabe, keine berechnete Fahrzeit.
 
@@ -199,7 +199,7 @@ Geprüft: HTML-Struktur/eindeutige IDs, bestehende Offline-Backendprüfungen, fu
 
 ## Direkte, eindeutig formulierte Kalenderaufträge
 
-„Erstelle mir ein Termin für morgen 15 Uhr beim Zahnarzt“ wird als ausdrücklich gewünschte Kalenderaktion behandelt. Der lokale Parser versteht Uhrzeit mit oder ohne „um“, Minuten und ausdrücklich genannte Dauer/Endzeit. Ohne Dauer wird eine Stunde verwendet und im Ergebnis genannt. Das Modell wird für diesen Ablauf nicht aufgerufen. Das Datum wird auf dem Mac in Europe/Berlin bestimmt. Mehrdeutige/fehlende Angaben, Verneinungen und Serientermine werden nicht stillschweigend als Einzeltermin gespeichert.
+„Erstelle mir ein Termin für morgen 15 Uhr beim Zahnarzt“ wird als ausdrücklich gewünschte Kalenderaktion behandelt. Der lokale Parser versteht Uhrzeit mit oder ohne „um“, Minuten und ausdrücklich genannte Dauer/Endzeit. Ohne Dauer werden 15 Minuten verwendet und im Ergebnis genannt. Das Modell wird für diesen Ablauf nicht aufgerufen. Das Datum wird auf dem Mac in Europe/Berlin bestimmt. Mehrdeutige/fehlende Angaben, Verneinungen und Serientermine werden nicht stillschweigend als Einzeltermin gespeichert.
 
 Der authentifizierte Kalenderaktions-Endpunkt verwendet den bereits verbundenen iCloud-CalDAV-Zugang. Nach Samets ausdrücklicher Vorgabe gehen Sprach- und Chat-Aufträge immer in den eindeutig beschreibbaren Kalender „Arbeit“, unabhängig von älteren Standardkalender-Einstellungen. Auch kurze Angaben wie „Termin 15 Uhr morgen mit Samet“ werden ohne zweite Bestätigung gespeichert. Fehlt „Arbeit“ oder gibt es mehrere gleichnamige beschreibbare Kalender, wird nichts in einen anderen Kalender geschrieben. Überschneidungen und unvollständige Konfliktprüfungen werden nach dem Speichern als Hinweis gemeldet, ohne erneute Bestätigung. Eine fehlende Verbindung öffnet die iCloud-Einrichtung. Ein Kalender nur unter „Auf meinem iPhone“ ist kein iCloud-CalDAV-Kalender.
 

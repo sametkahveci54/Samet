@@ -38,7 +38,7 @@ class CalendarActionTests(unittest.TestCase):
         start=datetime.fromisoformat(event['start']);end=datetime.fromisoformat(event['end'])
         self.assertEqual(start.hour,15)
         self.assertEqual(start.date(),(datetime.now(accounts.BERLIN)+timedelta(days=1)).date())
-        self.assertEqual(end-start,timedelta(hours=1))
+        self.assertEqual(end-start,timedelta(minutes=15))
         self.generate.assert_not_called()
         self.assertIn('In iCloud eingetragen',result['message'])
         self.assertEqual(self.file.stat().st_mode&0o777,0o600)
@@ -49,11 +49,17 @@ class CalendarActionTests(unittest.TestCase):
         event=result['event']
         self.assertEqual(datetime.fromisoformat(event['start']).minute,30)
         self.assertEqual(datetime.fromisoformat(event['end'])-datetime.fromisoformat(event['start']),timedelta(minutes=30))
-        self.assertNotIn('60 Minuten',result['message'])
+        self.assertNotIn('Ohne genannte Dauer',result['message'])
 
     def test_missing_time_does_not_fall_through_to_repeating_chat(self):
         result=self.run_order('Erstelle morgen einen Termin beim Zahnarzt')
         self.assertEqual(result['kind'],'calendar_clarify');self.generate.assert_not_called();self.cloud.create.assert_not_called()
+
+    def test_explicit_end_time_overrides_fifteen_minute_default(self):
+        result=self.run_order('Erstelle morgen 15 Uhr bis 16 Uhr Zahnarzttermin')
+        event=result['event']
+        self.assertEqual(datetime.fromisoformat(event['end'])-datetime.fromisoformat(event['start']),timedelta(hours=1))
+        self.assertNotIn('Ohne genannte Dauer',result['message'])
 
     def test_invalid_hour_never_writes(self):
         with self.assertRaises(ValueError):self.run_order('Erstelle morgen 25 Uhr Zahnarzttermin')

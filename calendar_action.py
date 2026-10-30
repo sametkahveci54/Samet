@@ -83,7 +83,7 @@ def execute(text, fields, hint, request_id, implicit_duration=True):
             # Keep the durable uncertain receipt: the server might have accepted it.
             return uncertain
         result = {'kind':'calendar_saved','event':event,
-            'message':'In iCloud eingetragen: '+summary+'. '+('Ohne genannte Dauer sind 60 Minuten vorgesehen. ' if implicit_duration else '')+'Auf deinem iPhone erscheint der Termin, wenn dieser iCloud-Kalender dort synchronisiert wird.'}
+            'message':'In iCloud eingetragen: '+summary+'. '+('Ohne genannte Dauer sind 15 Minuten vorgesehen. ' if implicit_duration else '')+'Auf deinem iPhone erscheint der Termin, wenn dieser iCloud-Kalender dort synchronisiert wird.'}
         if event['conflicts']:
             result['message'] += ' Hinweis: Der Termin überschneidet sich mit einem bestehenden Termin.'
         if event['conflict_warnings']:
