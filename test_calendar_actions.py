@@ -59,6 +59,19 @@ class CalendarActionTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.run_order('Erstelle morgen 25 Uhr Zahnarzttermin')
         self.cloud.create.assert_not_called()
 
+    def test_exact_short_user_sentence_uses_tomorrow_without_model(self):
+        result=self.run_order('Termin 15 Uhr morgen mit Samet')
+        self.assertEqual(result['kind'],'event')
+        start=datetime.fromisoformat(result['fields']['start'])
+        self.assertEqual(start.date(),(datetime.now(accounts.BERLIN)+timedelta(days=1)).date())
+        self.assertEqual(start.hour,15)
+        self.assertEqual(result['fields']['title'],'mit Samet')
+        self.generate.assert_not_called();self.cloud.create.assert_not_called()
+
+    def test_short_entry_without_date_clarifies_instead_of_chat(self):
+        self.assertEqual(self.run_order('Termin 15 Uhr mit Samet')['kind'],'calendar_clarify')
+        self.generate.assert_not_called();self.cloud.create.assert_not_called()
+
     def test_missing_icloud_is_an_actionable_setup_result(self):
         self.key.return_value.get.return_value=None
         self.assertEqual(self.run_order()['kind'],'calendar_setup')

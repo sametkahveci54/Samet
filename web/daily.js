@@ -179,6 +179,7 @@ async function executeCalendarOrder(text){
   return value.message;
 }
 async function dailyAnswer(text){
+  if(/^(bitte\s+)?termin\b/i.test(text))return await executeCalendarOrder(text);
   if(/^(bitte\s+)?(trag[e]?|erstelle?|plane|leg[e]?)\b/i.test(text)&&/termin|kalender|\bein\b/i.test(text)&&! /\baufgabe\b/i.test(text))return await executeCalendarOrder(text);
   if(/^(bitte\s+)?(trag[e]?|erstelle|plane|leg[e]?|merke?|notiere|speichere)\b/i.test(text)){
     const value=await api('/api/assistant/plan',{text});

@@ -131,13 +131,16 @@ def prepare(kind, payload):
 def handle(path, data, generate):
     if path == '/api/assistant/calendar':
         text = personal.text(data.get('text'), 2000, 'Kalenderauftrag')
-        if not re.match(r'^(?:bitte\s+)?(?:trage?|erstelle?|plane|lege?)\b', text, re.I) or not re.search(r'termin|kalender|\bein\b', text, re.I):
+        short_order = bool(re.match(r'^(?:bitte\s+)?termin\b', text, re.I))
+        if not (short_order or re.match(r'^(?:bitte\s+)?(?:trage?|erstelle?|plane|lege?)\b', text, re.I)) or not re.search(r'termin|kalender|\bein\b', text, re.I):
             raise ValueError('Bitte einen ausdrücklichen Kalenderauftrag nennen.')
         if re.search(r'\b(?:nicht|keinen?|niemals|jeden?|täglich|wöchentlich|monatlich|oder|vielleicht|eventuell)\b', text, re.I):
             return {'kind': 'calendar_clarify', 'message': 'Bitte einen einzelnen, ausdrücklich gewünschten Termin mit Datum, Uhrzeit und Titel nennen. Es wurde nichts eingetragen.'}
         value = local_event(text, datetime.now(accounts.BERLIN))
         if value is None:
             return {'kind': 'calendar_clarify', 'message': 'Bitte Datum, Uhrzeit und Titel nennen, zum Beispiel: „Erstelle mir einen Termin für morgen 15 Uhr beim Zahnarzt“. Es wurde nichts eingetragen.'}
+        if short_order:
+            return plan_event(value, 'Kurze Termineingabe; bitte vor dem Eintragen bestätigen.')
         from calendar_action import execute
         return execute(text, event_fields(value), value.get('calendar_name', ''), data.get('request_id'), not value.get('duration_explicit', False))
     if path == '/api/assistant/confirm':
