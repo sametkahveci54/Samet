@@ -8,6 +8,7 @@ function activateView(name,remember=true){
     if(key===name)$('nav-'+key).setAttribute('aria-current','page');else $('nav-'+key).removeAttribute('aria-current');
   }
   $('page-title').textContent=workspaceViews[name];
+  if(typeof syncStudioView==='function')syncStudioView(name);
   if(remember)window.history?.replaceState(null,'','#'+name);
   if(name==='calendar'&&!lastCalendarData&&!calendarFailure)refreshCalendar().catch(()=>{});
 }
@@ -31,6 +32,7 @@ function updateCalendarMetric(data){
   metric('next-appointment','Nächster Termin',next?(next.all_day?'Ganztägig':berlinTime(next.start)+' Uhr')+' · '+next.title:data.warnings.length?'Kalender unvollständig':'Heute nichts Weiteres');
 }
 function refreshMailOverview(){
+  if(typeof updateStudioBadges==='function')updateStudioBadges();
   const list=$('overview-mails');list.replaceChildren();
   if(!mailLoaded){list.append(node('p',mailFailure||'Posteingang wird geladen …','empty-state'));return;}
   if(mailFailure)list.append(node('p','Aktualisierung fehlgeschlagen. Zuletzt geladene Mails:','connection-alert'));
@@ -39,11 +41,11 @@ function refreshMailOverview(){
     const row=node('div','','compact-item'),button=document.createElement('button');button.type='button';
     const text=node('div','');text.append(node('strong',mail.subject),node('small',mail.sender));
     button.append(text);button.onclick=()=>{activateView('mail');selectMail(mail);};
-    row.append(node('span','✉','mail-avatar'),button);list.append(row);
+    row.append(typeof workspaceIcon==='function'?workspaceIcon('mail','mail-avatar'):node('span','✉','mail-avatar'),button);list.append(row);
   }
 }
 function refreshCalendarOverview(data){
-  lastCalendarData=data;const list=$('overview-events');list.replaceChildren();
+  lastCalendarData=data;if(typeof updateStudioBadges==='function')updateStudioBadges();const list=$('overview-events');list.replaceChildren();
   if(data.warnings.length)list.append(node('p','Übersicht unvollständig. Hinweise unter Kalender beachten.','connection-alert'));
   const events=data.events.filter(e=>e.all_day||new Date(e.end).getTime()>Date.now());
   if(!events.length)list.append(node('p',data.warnings.length?'Keine verbleibenden Termine geladen.':'Heute stehen keine weiteren Termine an.','empty-state'));
@@ -58,13 +60,14 @@ function calendarOverviewError(error){
   else{list.replaceChildren(node('p','Aktualisierung fehlgeschlagen. '+error.message,'connection-alert'));}
 }
 function refreshTaskOverview(){
+  if(typeof updateStudioBadges==='function')updateStudioBadges();
   const list=$('overview-tasks');list.replaceChildren();if(!personalState)return;
   const tasks=personalState.tasks.filter(t=>!t.done).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
   if(!tasks.length){list.append(node('p','Alles erledigt. Neue Aufgaben kannst du direkt unter Aufgaben hinzufügen.','empty-state'));return;}
   for(const task of tasks.slice(0,4)){
     const row=node('div','','compact-item'),button=document.createElement('button');button.type='button';button.onclick=()=>activateView('tasks');
     button.append(node('strong',task.title),node('small',task.due?'Fällig: '+new Date(task.due+'T12:00:00').toLocaleDateString('de-DE'):'Ohne Fälligkeitsdatum'));
-    row.append(node('span','✓','mail-avatar'),button);list.append(row);
+    row.append(typeof workspaceIcon==='function'?workspaceIcon('tasks','mail-avatar'):node('span','✓','mail-avatar'),button);list.append(row);
   }
 }
 activateView(window.location?.hash?.slice(1)||'overview',false);

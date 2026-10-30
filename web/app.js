@@ -121,6 +121,7 @@ if (Recognition) {
   $('dictate').onclick=()=>{if(listening){recognition.stop();return;} if(busy)return; stopAudio(); beforeDictation=$('prompt').value;dictationFinal=false;allowAutoSend=true; try{recognition.start();}catch{allowAutoSend=false;$('speech-status').textContent='Bitte kurz warten und erneut antippen.';}};
 } else {$('dictate').disabled=true; $('speech-status').textContent='Hier ist keine Browser-Spracheingabe verfügbar. Nutze das Mikrofon deiner Tastatur oder Safari.';}
 function add(role, text) {
+  if($('assistant-starters'))$('assistant-starters').hidden=true;
   const el = document.createElement('article'); el.className = 'message ' + role;
   const name = document.createElement('strong'); name.textContent = role === 'user' ? 'Du' : 'Jarvis'; el.append(name, document.createTextNode(text));
   if(role === 'assistant') { const b = document.createElement('button'); b.className = 'quiet'; b.textContent = '▷ Vorlesen'; b.onclick = () => speak(text); el.append(b); }
@@ -138,8 +139,8 @@ $('prompt').onkeydown = e => {if(e.key === 'Enter' && !e.shiftKey && !e.isCompos
 for(const b of document.querySelectorAll('[data-action]')) b.onclick = async () => {b.disabled = true; try{$('notice').textContent = (await api('/api/action',{action:b.dataset.action})).message;}catch(e){$('notice').textContent = e.message;}finally{b.disabled=false;}};
 $('save-note').onclick = async () => {const b=$('save-note'); b.disabled=true; try{$('notice').textContent=(await api('/api/action',{action:'notiz',text:$('note').value})).message; $('note').value='';}catch(e){$('notice').textContent=e.message;}finally{b.disabled=false;}};
 $('stop-speak').onclick = () => {stopAudio(); $('speech-status').textContent='Vorlesen gestoppt.';};
-$('clear').onclick = () => {history=[]; $('messages').replaceChildren(); stopAudio();};
-async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● Modell bereit':'○ Ollama prüfen';$('status').dataset.online=String(d.online);if(typeof renderRuntimeStatus==='function')renderRuntimeStatus(d);}catch{$('status').textContent='○ Verbindung unterbrochen';$('status').dataset.online='false';}}
+$('clear').onclick = () => {history=[]; $('messages').replaceChildren();if($('assistant-starters'))$('assistant-starters').hidden=false; stopAudio();};
+async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● KI verfügbar':'○ Ollama prüfen';$('status').dataset.online=String(d.online);if(typeof renderRuntimeStatus==='function')renderRuntimeStatus(d);}catch{$('status').textContent='○ Verbindung unterbrochen';$('status').dataset.online='false';}}
 status(); setInterval(status,30000);
 if(!window.speechSynthesis){for(const [value,label] of [['clone','Eigene Stimme · KI-Klon (lokal)'],['neural','Victoria · Weiblich / Kokoro (lokal)']]){const o=document.createElement('option');o.value=value;o.textContent=label;$('voice').append(o);} $('voice').value='clone';}
 

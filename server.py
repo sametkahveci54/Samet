@@ -87,6 +87,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/daily.css': files[path] = ('daily.css', 'text/css; charset=utf-8')
         if path == '/online-voice.js': files[path] = ('online-voice.js', 'text/javascript; charset=utf-8')
         if path == '/dashboard.js': files[path] = ('dashboard.js', 'text/javascript; charset=utf-8')
+        for asset, mime in [('appearance.js', 'text/javascript; charset=utf-8'), ('studio.js', 'text/javascript; charset=utf-8'), ('studio.css', 'text/css; charset=utf-8')]:
+            if path == '/' + asset: files[path] = (asset, mime)
         if path not in files: return self.reply(404, {'error': 'Nicht gefunden.'})
         name, mime = files[path]
         self.reply(200, (ROOT / 'web' / name).read_bytes(), mime)

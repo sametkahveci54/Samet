@@ -1,6 +1,6 @@
 'use strict';
 let personalState=null, calendarOptions=[], proposal=null;
-function metric(id,title,detail){const icon=node('span',id==='next-appointment'?'▦':id==='priority-count'?'✉':'✓','stat-icon');icon.setAttribute('aria-hidden','true');const copy=node('span',title);copy.append(node('small',detail));$(id).replaceChildren(icon,copy);}
+function metric(id,title,detail){const icon=typeof workspaceIcon==='function'?workspaceIcon(id==='next-appointment'?'calendar':id==='priority-count'?'mail':'tasks','stat-icon'):node('span',id==='next-appointment'?'▦':id==='priority-count'?'✉':'✓','stat-icon');icon.setAttribute('aria-hidden','true');const copy=node('span',title);copy.append(node('small',detail));$(id).replaceChildren(icon,copy);}
 function localInput(iso){const date=new Date(iso);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 function go(id){if(typeof revealTarget==='function')revealTarget(id);$(id).scrollIntoView({behavior:'smooth',block:'start'});}
 function dayMetrics(results){

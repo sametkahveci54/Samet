@@ -9,7 +9,7 @@ class Element{
  replaceChildren(...children){this._text='';this.children=[...children];}
  get firstChild(){return this.children[0];}get options(){return this.children;}
  setAttribute(key,value){this.attrs[key]=value;}removeAttribute(key){delete this.attrs[key];}
- addEventListener(){}after(){}scrollIntoView(){}focus(){}select(){}reset(){}pause(){}play(){return Promise.resolve();}
+ addEventListener(){}after(){}scrollIntoView(){}focus(){this.focused=true;}select(){}reset(){}showModal(){this.open=true;}close(){this.open=false;}pause(){}play(){return Promise.resolve();}
  requestSubmit(){return this.onsubmit?.({preventDefault(){},submitter:new Element('button')});}
 }
 (async()=>{
@@ -18,7 +18,7 @@ class Element{
   assert(!elements.has(match[3]),'Duplicate ID '+match[3]);const el=new Element(match[1]);
   el.hidden=/\bhidden(?:\s|>|$)/.test(match[2]);el.value=match[2].match(/\bvalue="([^"]*)"/)?.[1]||'';elements.set(match[3],el);
  }
- const get=id=>{assert(elements.has(id),'Missing element '+id);return elements.get(id);};
+ const get=id=>{if(elements.has(id))return elements.get(id);const find=el=>{if(el?.id===id)return el;for(const child of el?.children||[]){if(typeof child==='object'){const found=find(child);if(found)return found;}}};for(const el of elements.values()){const found=find(el);if(found)return found;}assert.fail('Missing element '+id);};
  const calls=[],spoken=[],local=new Map([['jarvis.autoSpeak','off']]);
  const personal={preferences:{tone:'freundlich',signature:'',priority_senders:[],priority_keywords:[],buffer_minutes:0,default_calendar:''},tasks:[],memories:[]};
  const start=new Date(Date.now()+86400000),end=new Date(start.getTime()+3600000);
@@ -56,11 +56,11 @@ class Element{
  const sources=[];
  class AudioContext{constructor(){this.state='running';this.currentTime=0;this.destination={};}resume(){return Promise.resolve();}createBuffer(channels,count,rate){return {duration:count/rate,getChannelData:()=>new Float32Array(count)};}createBufferSource(){const source={connect(){},start(){},stop(){this.stopped=true;}};sources.push(source);return source;}}
  const context=vm.createContext({console,crypto:webcrypto,Uint8Array,Blob,AbortController,DOMException,Intl,Date,Promise,URL,
-  document:{getElementById:get,createElement:tag=>new Element(tag),createTextNode:text=>String(text),querySelectorAll:()=>[],body:new Element('body')},
+  document:{documentElement:new Element('html'),getElementById:get,createElement:tag=>new Element(tag),createTextNode:text=>String(text),querySelectorAll:()=>[],body:new Element('body')},
   window:{AudioContext,speechSynthesis:speech,SpeechRecognition:Recognition},speechSynthesis:speech,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},
   navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value)},
   fetch,setInterval(){},matchMedia:()=>({matches:false})});
- for(const script of ['web/app.js','web/online-voice.js','web/organizer.js','web/daily.js','web/dashboard.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
+ for(const script of ['web/appearance.js','web/app.js','web/online-voice.js','web/organizer.js','web/daily.js','web/dashboard.js','web/studio.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
  const flush=async()=>{for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));};
  await flush();assert(get('system-version').textContent.includes('Alltag Test'));
  assert(calls.some(c=>c.path==='/api/mail/inbox'),'Inbox loads automatically');
@@ -95,6 +95,20 @@ class Element{
  assert(calls.some(c=>c.path==='/api/chat'&&c.data.messages.at(-1).content==='Hallo'));
  get('voice-short').checked=true;vm.runInContext('speak("Lange Antwort. ".repeat(100))',context);
  assert(spoken.at(-1).length<800);assert(spoken.at(-1).includes('vollständigen Text'));
+ holdCalendar=true;const briefing=get('quick-briefing').onclick();await flush();
+ assert.equal(vm.runInContext('sendToJarvis("Bitte warten")',context),false,'Briefing prevents competing chat requests');
+ calendarRelease();await briefing;holdCalendar=false;assert.equal(get('quick-briefing').disabled,false);
+ assert(get('messages').textContent.includes('Tagesübersicht'),'Briefing uses the loaded day overview');
+ assert.equal(vm.runInContext('document.documentElement.dataset.theme',context),'dark');
+ get('theme-toggle').onclick();assert.equal(local.get('jarvis.theme'),'light');get('theme-toggle').onclick();
+ get('command-open').onclick();assert.equal(get('command-dialog').open,true);
+ get('command-search').value='Terminbestätigung';get('command-search').oninput();assert(get('command-results').textContent.includes('Mail ·'));
+ get('command-search').onkeydown({key:'Enter',preventDefault(){}});assert.equal(get('command-dialog').open,false);assert.equal(get('view-mail').hidden,false);
+ get('command-open').onclick();get('command-search').value='Werkstatt anrufen';get('command-search').oninput();assert(get('command-results').textContent.includes('Aufgabe'));
+ get('command-search').onkeydown({key:'Enter',preventDefault(){}});assert.equal(get('view-tasks').hidden,false);
+ get('workspace-prompt').value='Erkläre mir bitte kurz, was du kannst';await get('workspace-command').requestSubmit();await flush();
+ assert(calls.some(c=>c.path==='/api/chat'&&c.data.messages.at(-1).content==='Erkläre mir bitte kurz, was du kannst'));
+ get('command-open').onclick();get('command-search').onkeydown({key:'Escape',preventDefault(){}});assert.equal(get('command-dialog').open,false);
  await vm.runInContext('speakMarin("Hallo Samet.")',context);
  assert.equal(sources.length,2,'Odd PCM chunks are joined and scheduled as they arrive');
  const billed=calls.filter(c=>c.path==='/api/speech').length;

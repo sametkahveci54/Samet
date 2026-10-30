@@ -173,3 +173,14 @@ Yahoo nutzt einen gebündelten, schreibgeschützten IMAP-Fetch der neuesten 20 N
 Eine sichtbare Seite aktualisiert den Posteingang frühestens nach fünf Minuten automatisch, sofern keine Mail ausgewählt ist. Ein geöffneter Entwurf wird dadurch nicht ersetzt. Es werden weiterhin keine Mails versendet, gelöscht oder verschoben. Suchergebnisse und Kategorien sind keine vollständige Spamprüfung. Zugangsdaten bleiben im Mac-Schlüsselbund.
 
 Prüfung: 59 Offline-Python-Tests, beide funktionalen UI-Suiten einschließlich Startabruf, getrenntem Laden, Such-/Ansichtswechsel und Erhalt der Liste nach Fehlern. Regression für blockierende iCloud-Abfrage, IMAP-Bündelung/Reihenfolge/Seen-Flags und Auszüge in mehreren Sitzungen. Zusätzlich Browserprüfung mit eindeutig gekennzeichneten Testdaten: Desktop-Posteingang und Lesebereich sowie Ansichten in einer 390-Pixel-Umgebung ohne horizontale Überbreite. Ein Live-Yahoo-Abruf und Safari auf dem eigenen iPhone bleiben Geräteprüfungen.
+
+
+## Workspace 2: zentrale Anliegen und Schnellsuche
+
+Neue Startansicht mit persönlicher Begrüßung, einer zentralen Eingabe, direkten Einstiegen in Tagesplan, wichtige Mails und Aufgaben sowie einem Tagesbriefing aus Kalender-, Mail- und Aufgabendaten. Ein eingegebenes Anliegen verwendet den vorhandenen Assistenten; Bestätigungen für gespeicherte Informationen und Kalender bleiben erforderlich. Neue Aufgaben aus dem Schnellzugriff öffnen zuerst das Aufgabenformular.
+
+Die Schnellsuche öffnet per ⌘K / Strg+K oder Suchsymbol. Sie durchsucht die geladenen Mailbetreff-/Absenderangaben, Aufgaben und Bereiche lokal im Browser. Sie ist keine Suche in der vollständigen Yahoo-Mailbox. Treffer lassen sich mit Pfeiltasten und Enter öffnen; Escape schließt den Dialog. Freier Text kann ausdrücklich an Jarvis übergeben werden. Ein laufender Chat wird dabei nicht durch eine neue Anfrage ersetzt.
+
+Hell-/Dunkelmodus über das Sonnensymbol. Standard ist Dunkel; die Auswahl wird je Gerät unter jarvis.theme gespeichert und vor dem ersten Seitenaufbau angewendet. Navigation, Eingaben, Mailansicht, Dialoge und Einstellungen verwenden dieselben Oberflächenfarben. Navigationszähler zeigen nur tatsächlich geladene ungelesene Mails, offene Aufgaben beziehungsweise verbleibende geladene Termine an. Gespeicherte Kontozugänge werden von erfolgreichen Mailabrufen unterschieden.
+
+Validierung: bestehende 59 Python-Prüfungen und beide funktionalen UI-Suiten, erweitert um Designwechsel, Suchtreffer für Mails/Aufgaben, Dialogbedienung und zentrale Anliegen. Zusätzlich Browserprüfung mit ausschließlich gekennzeichneten Testdaten für Suche → Mail, Designwechsel, Desktop und 390-/320-Pixel-Layouts. Diese Daten werden nicht mit ausgeliefert. Echte Konten und native Safari-/iPhone-Bedienung bleiben Geräteprüfungen.

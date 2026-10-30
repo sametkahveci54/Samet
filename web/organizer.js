@@ -13,6 +13,7 @@ function eventTime(item){
   return start+'–'+end+' Uhr';
 }
 function node(tag,text,className){const el=document.createElement(tag);el.textContent=text;if(className)el.className=className;return el;}
+let latestConnections=null;
 async function connectionStatus(){
   const status=await api('/api/connections/status',{});
   for(const provider of ['yahoo','icloud']){
@@ -21,6 +22,8 @@ async function connectionStatus(){
     if(value.email)$(provider+'-email').value=value.email;
   }
   if(!status.yahoo.connected||!status.icloud.connected)$('connections').open=true;
+  latestConnections=status;
+  if(typeof updateStudioConnections==='function')updateStudioConnections(status);
   return status;
 }
 async function loadCalendars(){
@@ -135,8 +138,11 @@ async function refreshCalendar(){
     finally{calendarLoading=null;if($('calendar-refresh'))$('calendar-refresh').disabled=false;}
   })();return calendarLoading;
 }
+let dayLoading=null;
 async function refreshDay(){
-  const button=$('day-refresh');if(button.disabled)return;button.disabled=true;$('day-speak').disabled=true;dayText='';
+  if(dayLoading)return dayLoading;
+  dayLoading=(async()=>{
+  const button=$('day-refresh');button.disabled=true;$('day-speak').disabled=true;dayText='';
   $('organizer-status').textContent='Posteingang und Kalender werden unabhängig voneinander aktualisiert …';
   const results=await Promise.allSettled([refreshCalendar(),refreshMail()]);
   const parts=['Deine Tagesübersicht für '+new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',dateStyle:'full'}).format(new Date())+'.'];
@@ -150,6 +156,8 @@ async function refreshDay(){
   dayText=parts.join(' ');$('day-speak').disabled=results.every(r=>r.status==='rejected');
   $('organizer-status').textContent=results.every(r=>r.status==='fulfilled')?'Übersicht aktualisiert.':'Teilweise geladen. Fehlermeldungen stehen im jeweiligen Bereich.';
   button.disabled=false;if(typeof dayMetrics==='function')dayMetrics(results);
+  })();
+  try{return await dayLoading;}finally{dayLoading=null;$('day-refresh').disabled=false;}
 }
 $('day-refresh').onclick=refreshDay;
 if($('mail-refresh'))$('mail-refresh').onclick=()=>refreshMail().catch(()=>{});
