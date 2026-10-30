@@ -90,11 +90,15 @@ def runtime_busy():
         return True
 
 
-def port_busy():
+def port_busy(port=8765):
     import socket
     with socket.socket() as sock:
+        # Match HTTPServer.allow_reuse_address: recently closed HTTP sockets
+        # may remain in TIME_WAIT after our child exits or we exec ourselves.
+        # A live listener still prevents binding; never terminate it here.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(('127.0.0.1', 8765))
+            sock.bind(('127.0.0.1', port))
             return False
         except OSError:
             return True

@@ -1,5 +1,6 @@
 import importlib.util
 import plistlib
+import socket
 import subprocess
 import tempfile
 import unittest
@@ -8,6 +9,21 @@ from unittest.mock import patch
 
 import auto_update as updater
 from install_auto_update import make_plist
+
+
+class PortTests(unittest.TestCase):
+    def test_listener_is_busy_but_closed_http_connection_is_reusable(self):
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+            listener.listen()
+            self.assertTrue(updater.port_busy(port))
+            with socket.create_connection(('127.0.0.1', port)) as client:
+                connection, _ = listener.accept()
+                connection.close()  # Server actively closes, leaving TIME_WAIT.
+                self.assertEqual(client.recv(1), b'')
+        self.assertFalse(updater.port_busy(port))
 
 
 class UpdateTests(unittest.TestCase):
@@ -127,3 +143,4 @@ class UpdateTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
