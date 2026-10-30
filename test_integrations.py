@@ -1,5 +1,6 @@
 """Offline tests: never contact accounts, change real calendars or read Keychain."""
 import json
+import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -126,11 +127,56 @@ class Tests(unittest.TestCase):
     def test_imap_is_readonly_and_uses_peek(self, imap):
         box=imap.return_value.__enter__.return_value
         box.select.return_value=('OK',[b'1'])
-        box.uid.side_effect=[('OK',[b'123']),('OK',[(b'BODY',b'Subject: Test\r\n\r\nHi')])]
+        box.uid.side_effect=[('OK',[b'123']),('OK',[(b'1 (UID 123 FLAGS () BODY[] {21}',b'Subject: Test\r\n\r\nHi')])]
         result=app.yahoo_inbox({'email':'test@yahoo.com','password':'app-password'})
         box.select.assert_called_once_with('INBOX',readonly=True)
         self.assertIn('BODY.PEEK',str(box.uid.call_args_list))
         self.assertEqual(len(result),1)
+
+    @patch.object(app.imaplib,'IMAP4_SSL')
+    def test_imap_batches_latest_messages_and_restores_newest_order(self, imap):
+        box=imap.return_value.__enter__.return_value
+        box.select.return_value=('OK',[b'3'])
+        box.uid.side_effect=[('OK',[b'1 2 3']),('OK',[
+            (b'1 (UID 2 FLAGS (\\Seen) BODY[] {25}',b'Subject: Middle\r\n\r\nText'), b')',
+            (b'2 (UID 3 FLAGS () BODY[] {25}',b'Subject: Newest\r\n\r\nText'), b')'])]
+        result=app.yahoo_inbox({'email':'test@yahoo.com','password':'app-password'},limit=2)
+        self.assertEqual([item['subject'] for item in result],['Newest','Middle'])
+        self.assertTrue(result[0]['unread']);self.assertFalse(result[1]['unread'])
+        self.assertEqual(box.uid.call_count,2)
+        self.assertEqual(box.uid.call_args.args[1],b'2,3')
+
+    @patch.object(app, 'yahoo_inbox', return_value=[])
+    @patch.object(app, 'ICloud')
+    def test_slow_calendar_does_not_block_inbox(self, calendar, inbox):
+        MemoryVault.values={'yahoo':{'email':'a@yahoo.com','password':'app-password'},'icloud':{'email':'a@icloud.com','password':'app-password'}}
+        entered,release,loaded=threading.Event(),threading.Event(),threading.Event()
+        def slow(*args):
+            entered.set();release.wait(3);return {'events':[],'warnings':[]}
+        calendar.return_value.events.side_effect=slow
+        worker=threading.Thread(target=lambda:self.call('calendar/today'))
+        reader=threading.Thread(target=lambda:(self.call('mail/inbox'),loaded.set()))
+        worker.start()
+        try:
+            self.assertTrue(entered.wait(1));reader.start()
+            self.assertTrue(loaded.wait(1),'A calendar network call must not hold the Yahoo lock')
+        finally:release.set();worker.join();reader.join()
+
+    @patch.object(app, 'yahoo_inbox', return_value=[])
+    def test_refresh_keeps_existing_selection_in_another_device(self, inbox):
+        MemoryVault.values['yahoo']={'email':'a@yahoo.com','password':'app-password'}
+        app.MAIL_CACHE['selected']=(app.time.monotonic(),{'subject':'Still selected'})
+        self.call('mail/inbox')
+        self.assertEqual(app.cached_mail('selected')['subject'],'Still selected')
+
+    def test_broken_icloud_credential_does_not_hide_yahoo_status(self):
+        class PartialVault(MemoryVault):
+            def get(self, name):
+                if name=='icloud':raise app.ConnectionError('Schlüsselbund gesperrt')
+                return {'email':'a@yahoo.com','password':'app-password'}
+        with patch.object(app,'Keychain',PartialVault):result=self.call('connections/status')
+        self.assertTrue(result['yahoo']['connected'])
+        self.assertIn('error',result['icloud'])
 
     def test_draft_requires_recent_loaded_mail(self):
         with self.assertRaises(app.ConnectionError): self.call('mail/draft',{'id':'missing','instruction':'Bedanken'})
@@ -149,3 +195,4 @@ class Tests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+

@@ -1,8 +1,8 @@
 'use strict';
 let personalState=null, calendarOptions=[], proposal=null;
-function metric(id,title,detail){$(id).replaceChildren(document.createTextNode(title),node('small',detail));}
+function metric(id,title,detail){const icon=node('span',id==='next-appointment'?'▦':id==='priority-count'?'✉':'✓','stat-icon');icon.setAttribute('aria-hidden','true');const copy=node('span',title);copy.append(node('small',detail));$(id).replaceChildren(icon,copy);}
 function localInput(iso){const date=new Date(iso);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
-function go(id){$(id).scrollIntoView({behavior:'smooth',block:'start'});}
+function go(id){if(typeof revealTarget==='function')revealTarget(id);$(id).scrollIntoView({behavior:'smooth',block:'start'});}
 function dayMetrics(results){
   if(results[0].status==='fulfilled'){
     const data=results[0].value;
@@ -62,7 +62,7 @@ function renderMemories(){
   if(!personalState.memories.length)$('memory-list').append(node('p','Jarvis hat noch keine ausdrücklich gespeicherten Informationen.'));
 }
 function applyPersonal(value,fill=false){
-  personalState=value;renderTasks();renderMemories();
+  personalState=value;renderTasks();renderMemories();if(typeof refreshTaskOverview==='function')refreshTaskOverview();
   if(fill){const p=value.preferences;$('reply-tone').value=p.tone;$('reply-signature').value=p.signature;
     $('priority-senders').value=p.priority_senders.join('\n');$('priority-keywords').value=p.priority_keywords.join('\n');$('calendar-buffer').value=p.buffer_minutes;calendarChoices(calendarOptions);}
 }
@@ -180,4 +180,4 @@ async function dailyAnswer(text){
   }
   return null;
 }
-api('/api/personal/state',{}).then(value=>applyPersonal(value,true)).catch(error=>$('task-status').textContent=error.message);
+api('/api/personal/state',{}).then(value=>applyPersonal(value,true)).catch(error=>{$('task-status').textContent=error.message;metric('task-count','Offene Aufgaben','Aufgaben konnten nicht geladen werden');if($('overview-tasks'))$('overview-tasks').replaceChildren(node('p',error.message,'empty-state'));});

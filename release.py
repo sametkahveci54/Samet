@@ -1,1 +1,1 @@
-VERSION = 'Alltag 1 · 2026.10.30'
+VERSION = 'Workspace · 2026.10.30'

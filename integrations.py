@@ -25,6 +25,8 @@ import personal
 BERLIN = ZoneInfo('Europe/Berlin')
 NS = {'d': 'DAV:', 'c': 'urn:ietf:params:xml:ns:caldav'}
 LOCK = threading.RLock()
+YAHOO_LOCK = threading.RLock()
+ICLOUD_LOCK = threading.RLock()
 MAIL_CACHE = {}
 PENDING_EVENTS = {}
 CONNECTION_TESTS = {}
@@ -205,16 +207,25 @@ def yahoo_inbox(creds, limit=20):
             if limit == 0: return []
             kind, data = box.uid('search', None, 'ALL')
             if kind != 'OK': raise ConnectionError('Yahoo-Nachrichten konnten nicht aufgelistet werden.')
-            result = []
-            for uid in reversed(data[0].split()[-limit:]):
+            uids = data[0].split()[-limit:]
+            if not uids: return []
+            # One fetch for the newest message set rather than 20 network trips.
+            kind, parts = box.uid('fetch', b','.join(uids), '(UID FLAGS BODY.PEEK[]<0.32768>)')
+            if kind != 'OK': raise ConnectionError('Yahoo-Nachrichten konnten nicht geladen werden.')
+            found = {}
+            for part in parts:
                 jobs.check()
-                kind, parts = box.uid('fetch', uid, '(BODY.PEEK[]<0.32768>)')
-                if kind != 'OK': raise ConnectionError('Yahoo-Nachricht konnte nicht gelesen werden.')
-                raw = next((p[1] for p in parts if isinstance(p, tuple) and isinstance(p[1], bytes)), b'')
+                if not isinstance(part, tuple) or not isinstance(part[1], bytes): continue
+                header, raw = part
+                match = re.search(rb'\bUID\s+(\d+)\b', header)
+                if not match: continue
                 item = parse_mail(raw)
                 item['partial'] = len(raw) >= 32768
-                result.append(prioritized(item))
-            return result
+                item['unread'] = b'\\Seen' not in header
+                found[match[1]] = prioritized(item)
+            if any(uid not in found for uid in uids):
+                raise ConnectionError('Yahoo hat nicht alle Mailauszüge geliefert. Bitte erneut laden.')
+            return [found[uid] for uid in reversed(uids)]
     except imaplib.IMAP4.error:
         raise ConnectionError('Yahoo-Anmeldung fehlgeschlagen. Konto und App-Passwort prüfen.') from None
     except (OSError, TimeoutError):
@@ -460,7 +471,11 @@ def connection(creds, provider):
 
 def handle(path, data, generate):
     """Called only by the authenticated POST router. Never returns passwords."""
-    with LOCK:
+    # Slow calendar/network/model work must not block the other provider.
+    lock = YAHOO_LOCK if path.startswith('/api/mail/') else ICLOUD_LOCK if path.startswith('/api/calendar/') else LOCK
+    if path in ('/api/connections/save', '/api/connections/remove'):
+        lock = YAHOO_LOCK if provider_name(data.get('provider')) == 'yahoo' else ICLOUD_LOCK
+    with lock:
         jobs.check()
         vault = Keychain()
         if path == '/api/connections/test':
@@ -477,8 +492,14 @@ def handle(path, data, generate):
             CONNECTION_TESTS.update(result)
             return result
         if path == '/api/connections/status':
-            return {p: {'connected': bool(v), 'email': v['email'] if v else ''}
-                    for p in ('yahoo', 'icloud') for v in [vault.get(p)]}
+            result = {}
+            for provider in ('yahoo', 'icloud'):
+                try:
+                    value = vault.get(provider)
+                    result[provider] = {'connected': bool(value), 'email': value['email'] if value else ''}
+                except ConnectionError as error:
+                    result[provider] = {'connected': False, 'email': '', 'error': str(error)}
+            return result
         if path == '/api/connections/save':
             provider = provider_name(data.get('provider'))
             value = credentials(data)
@@ -486,20 +507,25 @@ def handle(path, data, generate):
             else: ICloud(value).calendars()
             vault.set(provider, value)
             CONNECTION_TESTS[provider] = {'ok': True, 'message': 'Anmeldung geprüft.', 'checked_at': time.time()}
-            MAIL_CACHE.clear()
-            PENDING_EVENTS.clear()
+            if provider == 'yahoo': MAIL_CACHE.clear()
+            else: PENDING_EVENTS.clear()
             return {'message': 'Verbindung geprüft und im Mac-Schlüsselbund gespeichert.'}
         if path == '/api/connections/remove':
             provider = provider_name(data.get('provider'))
             vault.delete(provider)
             CONNECTION_TESTS.pop(provider, None)
-            MAIL_CACHE.clear()
-            PENDING_EVENTS.clear()
+            if provider == 'yahoo': MAIL_CACHE.clear()
+            else: PENDING_EVENTS.clear()
             return {'message': 'Verbindung auf diesem Mac entfernt.'}
         if path == '/api/mail/inbox':
             items = yahoo_inbox(connection(vault, 'yahoo'))
             CONNECTION_TESTS['yahoo'] = {'ok': True, 'message': 'Posteingang erfolgreich gelesen.', 'checked_at': time.time()}
-            MAIL_CACHE.clear()
+            # Keep existing selections in other tabs/devices valid for 15 minutes.
+            now = time.monotonic()
+            for key, (stamp, _) in list(MAIL_CACHE.items()):
+                if now - stamp > 900: MAIL_CACHE.pop(key, None)
+            while len(MAIL_CACHE) > 80:
+                MAIL_CACHE.pop(next(iter(MAIL_CACHE)))
             for item in items:
                 item['id'] = secrets.token_urlsafe(18)
                 MAIL_CACHE[item['id']] = (time.monotonic(), item)

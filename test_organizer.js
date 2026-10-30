@@ -3,7 +3,9 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 class Element {
-  constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.hidden=false;this.disabled=false;this.textContent='';}
+  constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.hidden=false;this.disabled=false;this.textContent='';this.dataset={};this.attrs={};}
+  setAttribute(key,value){this.attrs[key]=value;}
+  removeAttribute(key){delete this.attrs[key];}
   append(...items){this.children.push(...items);}
   replaceChildren(...items){this.children=[...items];}
   get firstChild(){return this.children[0];}
@@ -67,3 +69,4 @@ assert.equal(calls.length,before,'Unrelated chat must not fetch private data');
 assert((await vm.runInContext('organizerAnswer("Welche Termine habe ich heute?")',context)).includes('Werkstatt'));
 console.log('Organizer UI: DOM IDs, inbox/draft, explicit confirmation, invalidation, secret clearing and scoped calendar routing: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+

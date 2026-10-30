@@ -17,7 +17,7 @@ async function connectionStatus(){
   const status=await api('/api/connections/status',{});
   for(const provider of ['yahoo','icloud']){
     const value=status[provider];
-    $(provider+'-state').textContent=value.connected?'Verbunden: '+value.email:'Noch nicht verbunden';
+    $(provider+'-state').textContent=value.error|| (value.connected?'Zugang gespeichert: '+value.email:'Noch nicht verbunden');
     if(value.email)$(provider+'-email').value=value.email;
   }
   if(!status.yahoo.connected||!status.icloud.connected)$('connections').open=true;
@@ -41,7 +41,7 @@ for(const provider of ['yahoo','icloud']){
     $(provider+'-password').value='';
     try{
       const data=await api('/api/connections/save',value);$(provider+'-feedback').textContent=data.message;
-      await connectionStatus();if(provider==='icloud')await loadCalendars();
+      await connectionStatus();if(provider==='icloud')await loadCalendars();else await refreshMail();
     }catch(error){$(provider+'-feedback').textContent=error.message;}
     finally{value.password='';button.disabled=false;}
   };
@@ -50,63 +50,110 @@ for(const provider of ['yahoo','icloud']){
     try{
       const data=await api('/api/connections/remove',{provider});
       $(provider+'-feedback').textContent=data.message;dayText='';$('day-speak').disabled=true;
-      if(provider==='yahoo'){inbox=[];chosenMail=null;$('mail-detail').hidden=true;renderMail();$('reply-draft').value='';}
+      if(provider==='yahoo'){mailLoaded=false;mailFailure='Yahoo ist nicht verbunden.';inbox=[];chosenMail=null;if($('mail-placeholder'))$('mail-placeholder').hidden=false;$('mail-detail').hidden=true;mailUpdated=null;$('mail-status').textContent='Yahoo ist nicht verbunden. Bitte in den Einstellungen verbinden.';if($('mail-updated'))$('mail-updated').textContent='';renderMail();if(typeof updateMailMetric==='function')updateMailMetric();$('reply-draft').value='';}
       else{$('today-events').replaceChildren();$('event-calendar').replaceChildren(node('option','Zuerst iCloud verbinden'));cancelPreview();}
       await connectionStatus();
     }catch(error){$(provider+'-feedback').textContent=error.message;}
     finally{button.disabled=false;}
   };
 }
+let mailLoaded=false,mailLoading=null,calendarLoading=null,mailFailure='',calendarFailure='',mailUpdated=null;
+function selectMail(mail){
+  chosenMail=mail;$('mail-detail').hidden=false;
+  if($('mail-placeholder'))$('mail-placeholder').hidden=true;
+  $('mail-subject').textContent=mail.subject;const received=new Date(mail.date);$('mail-sender').textContent=mail.sender+' · '+(Number.isNaN(received.getTime())?mail.date:berlinDate(received));
+  $('mail-snippet').textContent=mail.snippet||'Kein lesbarer Textauszug vorhanden.';
+  $('mail-partial').textContent='Textauszug ohne Anhänge. '+(mail.partial?'Nur teilweise geladen. ':'')+'Einordnung: '+mail.reason+'.';
+  $('reply-draft').value='';$('reply-instruction').value='';$('draft-status').textContent='';
+  if(typeof selectMailExtras==='function')selectMailExtras(mail);
+  renderMail();
+  if(typeof matchMedia==='function'&&matchMedia('(max-width: 800px)').matches)$('mail-detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderMail(){
-  const filter=$('mail-filter').value;
-  const list=inbox.filter(m=>filter==='alle'||m.category===filter);
+  const filter=$('mail-filter').value||'alle',query=($('mail-search')?.value||'').trim().toLocaleLowerCase('de');
+  const list=inbox.filter(m=>(filter==='alle'||(filter==='ungelesen'&&m.unread)||m.category===filter)&&(!query||(m.subject+' '+m.sender+' '+(m.snippet||'')).toLocaleLowerCase('de').includes(query)));
   $('mail-list').replaceChildren();
-  if(!list.length){$('mail-list').append(node('p','In dieser Ansicht keine Nachrichten.'));return;}
+  if($('mail-count'))$('mail-count').textContent=mailLoaded?list.length+' von '+inbox.length+' Nachrichten':'Noch nicht geladen';
+  if(!list.length){
+    const empty=!mailLoaded?(mailFailure?'Posteingang konnte nicht geladen werden. Details stehen oben.':'Posteingang wird geladen …'):inbox.length?'Keine Treffer. Suche oder Filter ändern.':'Im Yahoo-Posteingang wurden keine Nachrichten gefunden.';
+    $('mail-list').append(node('p',empty,'empty-state'));
+  }
   for(const mail of list){
     const button=document.createElement('button');button.type='button';button.className='mail-row';
-    button.append(node('small',labels[mail.category]),node('strong',mail.subject),node('span',mail.sender));
-    button.onclick=()=>{
-      chosenMail=mail;$('mail-detail').hidden=false;
-      $('mail-subject').textContent=mail.subject;$('mail-sender').textContent=mail.sender+' · '+mail.date;
-      $('mail-snippet').textContent=mail.snippet||'Kein lesbarer Textauszug vorhanden.';
-      $('mail-partial').textContent='Textauszug, keine Anhänge. '+(mail.partial?'Nachricht wurde nur teilweise geladen. ':'')+'Einordnung: '+mail.reason+'. Absenderangaben können gefälscht sein.';
-      $('reply-draft').value='';$('reply-instruction').value='';$('draft-status').textContent='';
-      if(typeof selectMailExtras==='function')selectMailExtras(mail);
-    };
-    $('mail-list').append(button);
+    button.setAttribute('aria-pressed',String(chosenMail?.id===mail.id));
+    const avatar=node('span',(mail.sender.replace(/[^A-Za-zÄÖÜäöü]/g,'').slice(0,2)||'M').toUpperCase(),'mail-avatar');avatar.setAttribute('aria-hidden','true');
+    const copy=node('div','','mail-row-copy'),top=node('div','','mail-row-top');
+    const sender=node('span',mail.sender,'sender');
+    top.append(sender);
+    const date=new Date(mail.date);if(!Number.isNaN(date.getTime()))top.append(node('time',new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit'}).format(date)));
+    const subject=node('strong',mail.subject);if(mail.unread){const dot=node('span','','unread-dot');dot.setAttribute('aria-label','Ungelesen');subject.append(dot);}
+    const tag=node('small',labels[mail.category]||'Sonstige','category-tag');tag.dataset.category=mail.category;
+    copy.append(top,subject,node('span',mail.snippet||'Kein Textauszug','preview'),tag);
+    button.append(avatar,copy);button.onclick=()=>selectMail(mail);$('mail-list').append(button);
   }
+  if(typeof refreshMailOverview==='function')refreshMailOverview();
 }
 $('mail-filter').onchange=renderMail;
+if($('mail-search'))$('mail-search').oninput=renderMail;
+async function refreshMail(){
+  if(mailLoading)return mailLoading;
+  mailLoading=(async()=>{
+    if($('mail-refresh'))$('mail-refresh').disabled=true;
+    $('mail-list').setAttribute('aria-busy','true');$('mail-status').textContent=mailLoaded?'Mails werden aktualisiert. Bisherige Nachrichten bleiben sichtbar …':'Yahoo-Posteingang wird geladen …';
+    $('mail-status').className='subtle';
+    try{
+      const data=await api('/api/mail/inbox',{});inbox=data.messages;mailLoaded=true;mailFailure='';mailUpdated=new Date();
+      chosenMail=null;$('mail-detail').hidden=true;if($('mail-placeholder'))$('mail-placeholder').hidden=false;
+      $('reply-draft').value='';$('mail-status').textContent=data.note;
+      if($('mail-updated'))$('mail-updated').textContent='Stand '+mailUpdated.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      if($('mail-connect-shortcut'))$('mail-connect-shortcut').hidden=true;
+      renderMail();if(typeof updateMailMetric==='function')updateMailMetric();return data;
+    }catch(error){
+      mailFailure=error.message;$('mail-status').textContent=error.message+(mailLoaded?' Zuletzt geladene Nachrichten bleiben sichtbar.':' Du kannst erneut laden oder die Yahoo-Verbindung prüfen.');
+      $('mail-status').className='subtle connection-alert';if($('mail-connect-shortcut'))$('mail-connect-shortcut').hidden=false;
+      renderMail();if(typeof updateMailMetric==='function')updateMailMetric();throw error;
+    }finally{
+      mailLoading=null;$('mail-list').setAttribute('aria-busy','false');if($('mail-refresh'))$('mail-refresh').disabled=false;
+    }
+  })();return mailLoading;
+}
+function renderEvents(data){
+  $('today-events').replaceChildren();
+  $('calendar-status').textContent=data.warnings.length?'Übersicht unvollständig: '+data.warnings.join(' '):'Heutige Termine aktualisiert.';
+  if(!data.events.length)$('today-events').append(node('p',data.warnings.length?'Keine Termine geladen; Hinweise oben beachten.':'Heute sind keine Termine eingetragen.','empty-state'));
+  for(const item of data.events){const card=document.createElement('article');card.className='event-row';card.append(node('strong',eventTime(item)+' · '+item.title),node('small',item.calendar+(item.location?' · '+item.location:'')));$('today-events').append(card);}
+}
+async function refreshCalendar(){
+  if(calendarLoading)return calendarLoading;
+  calendarLoading=(async()=>{
+    if($('calendar-refresh'))$('calendar-refresh').disabled=true;$('calendar-status').textContent='iCloud-Kalender wird geladen …';
+    try{
+      const data=await api('/api/calendar/today',{});calendarFailure='';renderEvents(data);
+      if(typeof refreshCalendarOverview==='function')refreshCalendarOverview(data);
+      if(typeof updateCalendarMetric==='function')updateCalendarMetric(data);return data;
+    }catch(error){calendarFailure=error.message;$('calendar-status').textContent=error.message;if(typeof calendarOverviewError==='function')calendarOverviewError(error);throw error;}
+    finally{calendarLoading=null;if($('calendar-refresh'))$('calendar-refresh').disabled=false;}
+  })();return calendarLoading;
+}
 async function refreshDay(){
-  const button=$('day-refresh');button.disabled=true;$('day-speak').disabled=true;dayText='';
-  $('organizer-status').textContent='Termine und Mails werden geladen …';
-  $('calendar-status').textContent='Lädt …';$('mail-status').textContent='Lädt …';
-  $('today-events').replaceChildren();inbox=[];chosenMail=null;$('mail-list').replaceChildren();$('mail-detail').hidden=true;$('reply-draft').value='';
-  const results=await Promise.allSettled([api('/api/calendar/today',{}),api('/api/mail/inbox',{})]);
+  const button=$('day-refresh');if(button.disabled)return;button.disabled=true;$('day-speak').disabled=true;dayText='';
+  $('organizer-status').textContent='Posteingang und Kalender werden unabhängig voneinander aktualisiert …';
+  const results=await Promise.allSettled([refreshCalendar(),refreshMail()]);
   const parts=['Deine Tagesübersicht für '+new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',dateStyle:'full'}).format(new Date())+'.'];
   if(results[0].status==='fulfilled'){
-    const data=results[0].value;
-    $('calendar-status').textContent=data.warnings.length?'Unvollständige Übersicht: '+data.warnings.join(' '):'Alle abgefragten Termine für heute geladen.';
-    if(!data.events.length)$('today-events').append(node('p',data.warnings.length?'Keine Termine geladen; die Übersicht ist unvollständig.':'Heute sind keine Termine eingetragen.'));
-    for(const item of data.events){
-      const card=document.createElement('article');card.className='event-row';
-      const time=eventTime(item);
-      card.append(node('strong',time+' · '+item.title),node('small',item.calendar+(item.location?' · '+item.location:'')));
-      $('today-events').append(card);parts.push(time+': '+item.title+(item.location?', '+item.location:'')+'.');
-    }
+    const data=results[0].value;parts.push(...data.events.map(item=>eventTime(item)+': '+item.title+'.'));
     if(!data.events.length)parts.push(data.warnings.length?'Die Kalenderübersicht ist unvollständig.':'Heute sind keine Termine eingetragen.');
-    if(data.warnings.length&&data.events.length)parts.push('Achtung: Die Kalenderübersicht ist unvollständig.');
-  }else{$('calendar-status').textContent=results[0].reason.message;parts.push('Kalender konnte nicht geladen werden.');}
-  if(results[1].status==='fulfilled'){
-    const data=results[1].value;inbox=data.messages;$('mail-status').textContent=data.note;renderMail();
-    parts.push('Von den '+inbox.length+' neuesten Mails sind '+inbox.filter(m=>['prioritaet','pruefen'].includes(m.category)).length+' zum Prüfen und '+inbox.filter(m=>m.category==='werbung').length+' vermutlich Werbung.');
-  }else{$('mail-status').textContent=results[1].reason.message;parts.push('Mails konnten nicht geladen werden.');}
-  dayText=parts.join(' ');$('day-speak').disabled=false;
-  $('organizer-status').textContent='Übersicht aktualisiert. Mail-Einordnung ist eine Hilfestellung. Einzelheiten stehen darunter.';
-  button.disabled=false;
-  if(typeof dayMetrics==='function')dayMetrics(results);
+    if(data.warnings.length&&data.events.length)parts.push('Die Kalenderübersicht ist unvollständig.');
+  }else parts.push('Kalender konnte nicht geladen werden.');
+  if(results[1].status==='fulfilled')parts.push('Von den '+inbox.length+' neuesten Mails sind '+inbox.filter(m=>['prioritaet','pruefen'].includes(m.category)).length+' zum Prüfen hervorgehoben.');
+  else parts.push('Mails konnten nicht geladen werden.');
+  dayText=parts.join(' ');$('day-speak').disabled=results.every(r=>r.status==='rejected');
+  $('organizer-status').textContent=results.every(r=>r.status==='fulfilled')?'Übersicht aktualisiert.':'Teilweise geladen. Fehlermeldungen stehen im jeweiligen Bereich.';
+  button.disabled=false;if(typeof dayMetrics==='function')dayMetrics(results);
 }
 $('day-refresh').onclick=refreshDay;
+if($('mail-refresh'))$('mail-refresh').onclick=()=>refreshMail().catch(()=>{});
+if($('calendar-refresh'))$('calendar-refresh').onclick=()=>refreshCalendar().catch(()=>{});
 $('day-speak').onclick=()=>speak(dayText);
 $('draft-create').onclick=async()=>{
   if(!chosenMail){$('draft-status').textContent='Bitte eine Mail auswählen.';return;}

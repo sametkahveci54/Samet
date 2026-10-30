@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let token, history = [], busy = false;
-const ready = fetch('/api/session').then(r => r.json()).then(d => token = d.token);
+const ready = fetch('/api/session').then(r => r.json()).then(d => {if(typeof d.token!=='string')throw Error();return token=d.token;}).catch(()=>{throw new Error('Jarvis ist gerade nicht erreichbar. Bitte die Seite neu laden und den Serverstatus prüfen.');});
 const activeRequests = new Map();
 function requestProgress(){
   const panel=$('request-progress');if(!panel)return;
@@ -139,7 +139,7 @@ for(const b of document.querySelectorAll('[data-action]')) b.onclick = async () 
 $('save-note').onclick = async () => {const b=$('save-note'); b.disabled=true; try{$('notice').textContent=(await api('/api/action',{action:'notiz',text:$('note').value})).message; $('note').value='';}catch(e){$('notice').textContent=e.message;}finally{b.disabled=false;}};
 $('stop-speak').onclick = () => {stopAudio(); $('speech-status').textContent='Vorlesen gestoppt.';};
 $('clear').onclick = () => {history=[]; $('messages').replaceChildren(); stopAudio();};
-async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● Modell bereit':'○ Ollama prüfen';if(typeof renderRuntimeStatus==='function')renderRuntimeStatus(d);}catch{$('status').textContent='○ Verbindung unterbrochen';}}
+async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● Modell bereit':'○ Ollama prüfen';$('status').dataset.online=String(d.online);if(typeof renderRuntimeStatus==='function')renderRuntimeStatus(d);}catch{$('status').textContent='○ Verbindung unterbrochen';$('status').dataset.online='false';}}
 status(); setInterval(status,30000);
 if(!window.speechSynthesis){for(const [value,label] of [['clone','Eigene Stimme · KI-Klon (lokal)'],['neural','Victoria · Weiblich / Kokoro (lokal)']]){const o=document.createElement('option');o.value=value;o.textContent=label;$('voice').append(o);} $('voice').value='clone';}
 

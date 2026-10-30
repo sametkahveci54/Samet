@@ -86,6 +86,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/daily.js': files[path] = ('daily.js', 'text/javascript; charset=utf-8')
         if path == '/daily.css': files[path] = ('daily.css', 'text/css; charset=utf-8')
         if path == '/online-voice.js': files[path] = ('online-voice.js', 'text/javascript; charset=utf-8')
+        if path == '/dashboard.js': files[path] = ('dashboard.js', 'text/javascript; charset=utf-8')
         if path not in files: return self.reply(404, {'error': 'Nicht gefunden.'})
         name, mime = files[path]
         self.reply(200, (ROOT / 'web' / name).read_bytes(), mime)

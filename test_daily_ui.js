@@ -24,7 +24,7 @@ class Element{
  const start=new Date(Date.now()+86400000),end=new Date(start.getTime()+3600000);
  const event={title:'Werkstatt',start:start.toISOString(),end:end.toISOString(),location:'Berlin',reminder:15,
   calendar:'Privat',calendar_id:'https://p01-caldav.icloud.com/123/test/',conflicts:[],conflict_warnings:[],buffer_minutes:0,all_day:false};
- let conflicts=false,holdChat=false;
+ let conflicts=false,holdChat=false,failMail=false,holdCalendar=false,calendarRelease=null;
  const clone=value=>JSON.parse(JSON.stringify(value));
  async function fetch(url,options={}){
   const data=options.body?JSON.parse(options.body):{};calls.push({path:url,data:clone(data)});
@@ -34,9 +34,10 @@ class Element{
   else if(url==='/api/status')value={online:true,version:'Alltag Test',revision:'12345678',updater:{fresh:true,message:'Updates aktiv'},connections:{}};
   else if(url==='/api/connections/status')value={yahoo:{connected:true,email:'test@yahoo.com'},icloud:{connected:true,email:'test@icloud.com'}};
   else if(url==='/api/calendar/list')value={calendars:[{id:event.calendar_id,name:'Privat',writable:true}]};
-  else if(url==='/api/calendar/today')value={events:[event],warnings:[]};
+  else if(url==='/api/calendar/today'){if(holdCalendar)return new Promise(resolve=>{calendarRelease=()=>resolve({ok:true,json:async()=>({events:[event],warnings:[]})});});value={events:[event],warnings:[]};}
   else if(url==='/api/calendar/preview')value={confirmation:'event-token',event:{...event,conflicts:conflicts?[{...event,title:'Anderer Termin'}]:[]}};
   else if(url==='/api/calendar/create')value={message:'Termin in iCloud gespeichert.'};
+  else if(url==='/api/mail/inbox'&&failMail)throw Error('Yahoo ist gerade nicht erreichbar.');
   else if(url==='/api/mail/inbox')value={messages:[{id:'mail',sender:'A',subject:'Terminbestätigung',date:'Heute',snippet:'Ein kurzer Text.',category:'pruefen',reason:'Betreff'}],note:'Neueste 20 Mails'};
   else if(url==='/api/mail/summary'||url==='/api/mail/important-summary')value={summary:'Ein Termin wurde bestätigt.',count:1};
   else if(url==='/api/personal/state')value=personal;
@@ -59,10 +60,17 @@ class Element{
   window:{AudioContext,speechSynthesis:speech,SpeechRecognition:Recognition},speechSynthesis:speech,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},
   navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value)},
   fetch,setInterval(){},matchMedia:()=>({matches:false})});
- for(const script of ['web/app.js','web/online-voice.js','web/organizer.js','web/daily.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
+ for(const script of ['web/app.js','web/online-voice.js','web/organizer.js','web/daily.js','web/dashboard.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
  const flush=async()=>{for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));};
  await flush();assert(get('system-version').textContent.includes('Alltag Test'));
- get('mail-filter').value='alle';await get('open-overview').onclick();assert(get('priority-count').textContent.includes('1 von 1'));
+ assert(calls.some(c=>c.path==='/api/mail/inbox'),'Inbox loads automatically');
+ assert(!calls.some(c=>c.path==='/api/calendar/today'),'Calendar is not a startup dependency');
+ get('nav-mail').onclick();assert.equal(get('view-mail').hidden,false);assert.equal(get('view-overview').hidden,true);
+ get('mail-search').value='not-in-this-message';get('mail-search').oninput();assert(get('mail-list').textContent.includes('Keine Treffer'));
+ get('mail-search').value='';get('mail-search').oninput();
+ failMail=true;await get('mail-refresh').onclick();assert(get('mail-list').firstChild.onclick,'Failed refresh retains existing messages');assert(get('mail-status').textContent.includes('bleiben sichtbar'));failMail=false;
+ holdCalendar=true;const overview=get('day-refresh').onclick();await flush();assert(get('priority-count').textContent.includes('1 von 1'),'Mail renders while calendar still waits');calendarRelease();await overview;holdCalendar=false;
+ get('mail-filter').value='alle';assert(get('priority-count').textContent.includes('1 von 1'));
  get('mail-list').firstChild.onclick();await get('mail-summarize').onclick();assert(get('mail-summary').textContent.includes('Ein Termin'));
  const untouched=calls.length;
  assert.equal(await vm.runInContext('dailyAnswer("Warum sind deine Antworten manchmal langsam?")',context),null);
@@ -93,5 +101,5 @@ class Element{
  await vm.runInContext('speakMarin("Hallo Samet.")',context);
  assert.equal(calls.filter(c=>c.path==='/api/speech').length,billed,'Replay must not generate paid audio again');
  assert(sources.every(source=>source.stopped),'Stop/replay stops every queued audio source');
- console.log('All UI scripts: startup/status, inbox summary, local tasks, explicit memory/event confirmation, conflict acknowledgment, cancellation and opt-in voice sending: PASS');
+ console.log('Workspace UI: automatic inbox, independent loads, failed refresh retention, navigation/search, inbox summary, local tasks, explicit memory/event confirmation, conflict acknowledgment, cancellation and opt-in voice sending: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});
