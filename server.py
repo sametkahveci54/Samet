@@ -24,7 +24,7 @@ def draft_text(system, text):
     try:
         result = ollama('chat', {'model': 'qwen3:1.7b', 'messages': [
             {'role': 'system', 'content': system}, {'role': 'user', 'content': text}],
-            'stream': False, 'think': False, 'keep_alive': '5m',
+            'stream': False, 'think': False, 'keep_alive': '15m',
             'options': {'num_ctx': 4096, 'num_predict': 500, 'temperature': 0.2}}, 180)
         return result['message']['content']
     finally:
@@ -157,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
                     clean.append({'role': m['role'], 'content': m['content']})
                 if not CHAT_LOCK.acquire(blocking=False): return self.reply(429, {'error': 'Jarvis beantwortet gerade eine Nachricht. Bitte kurz warten.'})
                 try:
-                    result = ollama('chat', {'model': 'qwen3:1.7b', 'messages': [{'role': 'system', 'content': 'Du bist Jarvis. Antworte auf Deutsch. Beantworte die letzte Frage konkret und direkt; liefere die erbetene Information oder den gewünschten Text. Nutze den Gesprächsverlauf für Anschlussfragen. Nur wenn eine wesentliche Angabe fehlt, stelle eine gezielte Rückfrage. Antworte niemals nur mit einer Bestätigung oder mit "Wie kann ich helfen?", wenn bereits eine Frage gestellt wurde. Halte die Antwort normalerweise auf zwei bis fünf Sätze begrenzt. Du hast keine Werkzeuge und kannst im Chat keine Apps öffnen oder Notizen speichern.' + '\n' + personal.context()}] + clean, 'stream': False, 'think': False, 'keep_alive': '5m', 'options': {'num_ctx': 4096, 'num_predict': 350, 'temperature': 0.35, 'repeat_penalty': 1.1}}, 180)
+                    result = ollama('chat', {'model': 'qwen3:1.7b', 'messages': [{'role': 'system', 'content': 'Du bist Jarvis. Antworte auf Deutsch. Beantworte die letzte Frage konkret und direkt; liefere die erbetene Information oder den gewünschten Text. Nutze den Gesprächsverlauf für Anschlussfragen. Nur wenn eine wesentliche Angabe fehlt, stelle eine gezielte Rückfrage. Antworte niemals nur mit einer Bestätigung oder mit "Wie kann ich helfen?", wenn bereits eine Frage gestellt wurde. Halte die Antwort normalerweise auf zwei bis fünf Sätze begrenzt. Du hast keine Werkzeuge und kannst im Chat keine Apps öffnen oder Notizen speichern.' + '\n' + personal.context()}] + clean, 'stream': False, 'think': False, 'keep_alive': '15m', 'options': {'num_ctx': 4096, 'num_predict': 350, 'temperature': 0.35, 'repeat_penalty': 1.1}}, 180)
                     return self.reply(200, {'message': result['message']['content']})
                 finally: CHAT_LOCK.release()
             self.reply(404, {'error': 'Nicht gefunden.'})

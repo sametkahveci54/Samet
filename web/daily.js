@@ -181,4 +181,3 @@ async function dailyAnswer(text){
   return null;
 }
 api('/api/personal/state',{}).then(value=>applyPersonal(value,true)).catch(error=>$('task-status').textContent=error.message);
-status();

@@ -152,7 +152,8 @@ $('event-confirm').onclick=async()=>{
   catch(error){$('event-status').textContent=error.message;cancelPreview();}
 };
 $('new-event').ontoggle=()=>{if($('new-event').open)loadCalendars().catch(error=>$('event-status').textContent=error.message);};
-connectionStatus().then(status=>{if(status.icloud.connected)return loadCalendars();})
+if($('personal-settings'))$('personal-settings').ontoggle=()=>{if($('personal-settings').open)loadCalendars().catch(error=>$('preferences-status').textContent=error.message);};
+connectionStatus()
   .catch(error=>$('organizer-status').textContent=error.message);
 
 async function organizerAnswer(text){
