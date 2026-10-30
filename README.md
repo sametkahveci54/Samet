@@ -184,3 +184,14 @@ Die Schnellsuche öffnet per ⌘K / Strg+K oder Suchsymbol. Sie durchsucht die g
 Hell-/Dunkelmodus über das Sonnensymbol. Standard ist Dunkel; die Auswahl wird je Gerät unter jarvis.theme gespeichert und vor dem ersten Seitenaufbau angewendet. Navigation, Eingaben, Mailansicht, Dialoge und Einstellungen verwenden dieselben Oberflächenfarben. Navigationszähler zeigen nur tatsächlich geladene ungelesene Mails, offene Aufgaben beziehungsweise verbleibende geladene Termine an. Gespeicherte Kontozugänge werden von erfolgreichen Mailabrufen unterschieden.
 
 Validierung: bestehende 59 Python-Prüfungen und beide funktionalen UI-Suiten, erweitert um Designwechsel, Suchtreffer für Mails/Aufgaben, Dialogbedienung und zentrale Anliegen. Zusätzlich Browserprüfung mit ausschließlich gekennzeichneten Testdaten für Suche → Mail, Designwechsel, Desktop und 390-/320-Pixel-Layouts. Diese Daten werden nicht mit ausgeliefert. Echte Konten und native Safari-/iPhone-Bedienung bleiben Geräteprüfungen.
+
+
+## Presence: eigenständige visuelle Startansicht
+
+Die Startansicht unter #assistant verwendet eine eigene, prozedurale Lichtskulptur: toroidale Lichtbahnen um einen Partikelkern, türkisfarbene und warme Akzente, ruhiger Hintergrund und schmale Navigation. Es werden keine Grafiken oder Quelltexte der Videoreferenz übernommen. Übersicht, Mails, Kalender, Aufgaben und Einstellungen bleiben als Bereiche erhalten. Ein expliziter vorhandener Link wie #overview öffnet weiterhin diesen Bereich.
+
+Der Gesprächsverlauf öffnet nach einer Nachricht, Bestätigungen werden weiterhin vor dem Speichern angezeigt. Spracheingabe und Senden befinden sich direkt unter dem Visual; Stimme, Tempo und Bedienung sind aufklappbar, Sprachfehler bleiben neben der Eingabe sichtbar. Die Stopptaste beendet Vorlesen beziehungsweise bricht laufende Chat-Anfragen ab. Mikrofonzugriff startet ausschließlich nach Benutzeraktion.
+
+Canvas 2D stellt eine 3D-Projektion ohne neue Bibliotheken dar. Zustände ready/listening/thinking/speaking verändern Text und Bewegung anhand der bestehenden Benutzeroberfläche; es handelt sich nicht um eine aus Mikrofonsamples errechnete Visualisierung. Framerate ist auf 30 Desktop / 24 bei kleiner Fläche begrenzt, Auflösung auf DPR 1,5. In anderen Ansichten und bei unsichtbarem Tab stoppt die Animationsschleife. Pause ist pro Gerät speicherbar; die Systemeinstellung für reduzierte Bewegung hat Vorrang. Ohne Canvas bleibt ein statischer visueller Fallback erhalten.
+
+Geprüft: HTML-Struktur/eindeutige IDs, bestehende Offline-Backendprüfungen, funktionale UI-Suiten erweitert um neue Startansicht, Statusbeschriftung, Stoppen, Verlauf und gespeicherte Animationspause. Browserprüfung mit gekennzeichneten Testdaten umfasst Desktop, 390-/320-Pixel-Ansichten, sichtbares Canvas-Rendering, Pause, Stimmeinstellungen und Nachricht → Verlauf. Native Safari-/iPhone-Prüfung und M1-Leistungsmessung sind weiterhin Geräteprüfungen.

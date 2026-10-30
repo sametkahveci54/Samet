@@ -7,6 +7,7 @@ function activateView(name,remember=true){
     $('view-'+key).hidden=key!==name;
     if(key===name)$('nav-'+key).setAttribute('aria-current','page');else $('nav-'+key).removeAttribute('aria-current');
   }
+  document.body.dataset.view=name;
   $('page-title').textContent=workspaceViews[name];
   if(typeof syncStudioView==='function')syncStudioView(name);
   if(remember)window.history?.replaceState(null,'','#'+name);
@@ -70,7 +71,7 @@ function refreshTaskOverview(){
     row.append(typeof workspaceIcon==='function'?workspaceIcon('tasks','mail-avatar'):node('span','✓','mail-avatar'),button);list.append(row);
   }
 }
-activateView(window.location?.hash?.slice(1)||'overview',false);
+activateView(window.location?.hash?.slice(1)||'assistant',false);
 refreshMailOverview();refreshTaskOverview();
 // Mail is the default read-only startup action. Calendar loads independently
 // when its view/overview is requested; failures never hide the inbox.

@@ -46,7 +46,7 @@ $('auto-speak').onchange=()=>{settings.set('autoSpeak',$('auto-speak').checked?'
 $('enable-sound').onclick=()=>{unlockSound(); $('auto-speak').checked=true;settings.set('autoSpeak','on');speak('Hallo! Ich bin da. Du kannst mir jetzt deine Frage stellen.');};
 
 const player = document.createElement('audio'); player.controls=true; player.hidden=true; player.setAttribute('aria-label','Jarvis Sprachausgabe'); $('speech-status').after(player);
-function coreState(state) {document.body.dataset.state=state; $('core-state').textContent=({ready:'BEREIT FÜR DEIN SIGNAL',thinking:'GEDANKEN WERDEN VERKNÜPFT',speaking:'SPRACHAUSGABE AKTIV',listening:'ICH HÖRE DIR ZU'})[state];}
+function coreState(state) {document.body.dataset.state=state;if(typeof updatePresenceCaption==='function')updatePresenceCaption(state); $('core-state').textContent=({ready:'BEREIT FÜR DEIN SIGNAL',thinking:'GEDANKEN WERDEN VERKNÜPFT',speaking:'SPRACHAUSGABE AKTIV',listening:'ICH HÖRE DIR ZU'})[state];}
 function stopAudio(){speechID++; if(typeof stopOnlineSpeech==='function')stopOnlineSpeech(); if(audioSource){audioSource.onended=null;try{audioSource.stop();}catch{}audioSource=null;} speechRequest?.abort(); player.pause(); if(audioURL){URL.revokeObjectURL(audioURL);audioURL=null;} player.removeAttribute('src'); player.hidden=true; window.speechSynthesis?.cancel(); coreState('ready');}
 player.onplay=()=>{if(typeof stopOnlineSpeech==='function')stopOnlineSpeech();if(audioSource){audioSource.onended=null;try{audioSource.stop();}catch{}audioSource=null;}coreState('speaking');}; player.onended=()=>{coreState('ready'); $('speech-status').textContent='Du bist dran.';}; player.onpause=()=>{if(!busy)coreState('ready');};
 
@@ -114,13 +114,14 @@ for(const [id,key]of [['voice-auto-send','voiceAutoSend'],['voice-short','voiceS
 }
 if (Recognition) {
   recognition = new Recognition(); recognition.lang='de-DE'; recognition.interimResults=true; recognition.continuous=false;
-  recognition.onstart=()=>{coreState('listening');listening=true; $('dictate').textContent='■ Aufnahme beenden'; $('dictate').setAttribute('aria-pressed','true'); $('speech-status').textContent='Ich höre zu …';};
+  recognition.onstart=()=>{coreState('listening');listening=true; $('dictate').textContent='Aufnahme stoppen'; $('dictate').setAttribute('aria-pressed','true'); $('speech-status').textContent='Ich höre zu …';};
   recognition.onresult=e=>{let text='';for(let i=0;i<e.results.length;i++){text+=e.results[i][0].transcript+' ';if(e.results[i].isFinal)dictationFinal=true;} $('prompt').value=(beforeDictation+' '+text).trim().slice(0,8000);};
   recognition.onerror=e=>{allowAutoSend=false;$('speech-status').textContent=e.error==='not-allowed'?'Mikrofon oder Spracherkennung nicht freigegeben. Du kannst weiter tippen.':'Spracheingabe nicht verfügbar ('+e.error+'). Bitte erneut versuchen oder tippen.';};
-  recognition.onend=()=>{if(!busy)coreState('ready');listening=false; $('dictate').textContent='🎙 Nachricht sprechen'; $('dictate').setAttribute('aria-pressed','false'); if($('speech-status').textContent==='Ich höre zu …')$('speech-status').textContent='Text prüfen und auf Senden tippen.';const send=allowAutoSend&&dictationFinal&&$('voice-auto-send')?.checked&&!busy&&$('prompt').value.trim();allowAutoSend=false;if(send)$('chat-form').requestSubmit();};
+  recognition.onend=()=>{if(!busy)coreState('ready');listening=false; $('dictate').textContent='Sprechen'; $('dictate').setAttribute('aria-pressed','false'); if($('speech-status').textContent==='Ich höre zu …')$('speech-status').textContent='Text prüfen und auf Senden tippen.';const send=allowAutoSend&&dictationFinal&&$('voice-auto-send')?.checked&&!busy&&$('prompt').value.trim();allowAutoSend=false;if(send)$('chat-form').requestSubmit();};
   $('dictate').onclick=()=>{if(listening){recognition.stop();return;} if(busy)return; stopAudio(); beforeDictation=$('prompt').value;dictationFinal=false;allowAutoSend=true; try{recognition.start();}catch{allowAutoSend=false;$('speech-status').textContent='Bitte kurz warten und erneut antippen.';}};
 } else {$('dictate').disabled=true; $('speech-status').textContent='Hier ist keine Browser-Spracheingabe verfügbar. Nutze das Mikrofon deiner Tastatur oder Safari.';}
 function add(role, text) {
+  if($('presence-conversation'))$('presence-conversation').open=true;
   if($('assistant-starters'))$('assistant-starters').hidden=true;
   const el = document.createElement('article'); el.className = 'message ' + role;
   const name = document.createElement('strong'); name.textContent = role === 'user' ? 'Du' : 'Jarvis'; el.append(name, document.createTextNode(text));
@@ -133,13 +134,13 @@ $('chat-form').onsubmit = async e => {
   add('user', text); $('prompt').value = ''; history.push({role:'user',content:text});
   try { const organizerText = typeof organizerAnswer === 'function' ? await organizerAnswer(text) : null; const d = organizerText === null ? await api('/api/chat',{messages:history.slice(-16)}) : {message:organizerText}; history.push({role:'assistant',content:d.message}); add('assistant',d.message); if($('auto-speak').checked) speak(d.message); else $('speech-status').textContent='Ton ist ausgeschaltet. Aktiviere „Antworten vorlesen“ oder tippe auf „Vorlesen“.'; }
   catch(err) {add('assistant',err.message); history.pop();}
-  finally {busy = false; if(document.body.dataset.state==='thinking')coreState('ready'); $('dictate').disabled=!Recognition; $('send').disabled = false; $('clear').disabled = false; $('send').textContent = 'Senden ↗';}
+  finally {busy = false; if(document.body.dataset.state==='thinking')coreState('ready'); $('dictate').disabled=!Recognition; $('send').disabled = false; $('clear').disabled = false; $('send').textContent = 'Senden';}
 };
 $('prompt').onkeydown = e => {if(e.key === 'Enter' && !e.shiftKey && !e.isComposing && !matchMedia('(pointer: coarse)').matches) {e.preventDefault(); $('chat-form').requestSubmit();}};
 for(const b of document.querySelectorAll('[data-action]')) b.onclick = async () => {b.disabled = true; try{$('notice').textContent = (await api('/api/action',{action:b.dataset.action})).message;}catch(e){$('notice').textContent = e.message;}finally{b.disabled=false;}};
 $('save-note').onclick = async () => {const b=$('save-note'); b.disabled=true; try{$('notice').textContent=(await api('/api/action',{action:'notiz',text:$('note').value})).message; $('note').value='';}catch(e){$('notice').textContent=e.message;}finally{b.disabled=false;}};
 $('stop-speak').onclick = () => {stopAudio(); $('speech-status').textContent='Vorlesen gestoppt.';};
-$('clear').onclick = () => {history=[]; $('messages').replaceChildren();if($('assistant-starters'))$('assistant-starters').hidden=false; stopAudio();};
+$('clear').onclick = () => {history=[]; $('messages').replaceChildren();if($('assistant-starters'))$('assistant-starters').hidden=false;if($('presence-conversation'))$('presence-conversation').open=false; stopAudio();};
 async function status(){try{const d=await fetch('/api/status').then(r=>r.json()); $('status').textContent=d.online?'● KI verfügbar':'○ Ollama prüfen';$('status').dataset.online=String(d.online);if(typeof renderRuntimeStatus==='function')renderRuntimeStatus(d);}catch{$('status').textContent='○ Verbindung unterbrochen';$('status').dataset.online='false';}}
 status(); setInterval(status,30000);
 if(!window.speechSynthesis){for(const [value,label] of [['clone','Eigene Stimme · KI-Klon (lokal)'],['neural','Victoria · Weiblich / Kokoro (lokal)']]){const o=document.createElement('option');o.value=value;o.textContent=label;$('voice').append(o);} $('voice').value='clone';}

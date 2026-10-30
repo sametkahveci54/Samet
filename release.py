@@ -1,1 +1,1 @@
-VERSION = 'Workspace 2 · 2026.10.30'
+VERSION = 'Presence · 2026.10.30'

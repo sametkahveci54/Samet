@@ -9,7 +9,7 @@ class Element{
  replaceChildren(...children){this._text='';this.children=[...children];}
  get firstChild(){return this.children[0];}get options(){return this.children;}
  setAttribute(key,value){this.attrs[key]=value;}removeAttribute(key){delete this.attrs[key];}
- addEventListener(){}after(){}scrollIntoView(){}focus(){this.focused=true;}select(){}reset(){}showModal(){this.open=true;}close(){this.open=false;}pause(){}play(){return Promise.resolve();}
+ addEventListener(){}after(){}scrollIntoView(){}focus(){this.focused=true;}select(){}reset(){}click(){return this.onclick?.();}showModal(){this.open=true;}close(){this.open=false;}pause(){}play(){return Promise.resolve();}
  requestSubmit(){return this.onsubmit?.({preventDefault(){},submitter:new Element('button')});}
 }
 (async()=>{
@@ -60,9 +60,9 @@ class Element{
   window:{AudioContext,speechSynthesis:speech,SpeechRecognition:Recognition},speechSynthesis:speech,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},
   navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value)},
   fetch,setInterval(){},matchMedia:()=>({matches:false})});
- for(const script of ['web/appearance.js','web/app.js','web/online-voice.js','web/organizer.js','web/daily.js','web/dashboard.js','web/studio.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
+ for(const script of ['web/appearance.js','web/app.js','web/online-voice.js','web/organizer.js','web/daily.js','web/dashboard.js','web/studio.js','web/presence.js'])vm.runInContext(fs.readFileSync(script,'utf8'),context,{filename:script});
  const flush=async()=>{for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));};
- await flush();assert(get('system-version').textContent.includes('Alltag Test'));
+ await flush();assert.equal(get('view-assistant').hidden,false,'The original presence is the default start view');assert(get('system-version').textContent.includes('Alltag Test'));
  assert(calls.some(c=>c.path==='/api/mail/inbox'),'Inbox loads automatically');
  assert(!calls.some(c=>c.path==='/api/calendar/today'),'Calendar is not a startup dependency');
  get('nav-mail').onclick();assert.equal(get('view-mail').hidden,false);assert.equal(get('view-overview').hidden,true);
@@ -87,7 +87,7 @@ class Element{
  assert.equal(calls.filter(c=>c.path==='/api/calendar/create').length,1,'Conflict requires extra acknowledgment');
  get('conflict-ack').checked=true;await get('event-confirm').onclick();assert.equal(calls.filter(c=>c.path==='/api/calendar/create').length,2);
  holdChat=true;get('prompt').value='Erzähle mir etwas';const pending=get('chat-form').requestSubmit();await flush();
- assert.equal(get('request-progress').hidden,false);get('cancel-requests').onclick();await pending;
+ assert.equal(get('request-progress').hidden,false);assert(get('presence-caption-description').textContent.includes('bearbeitet'));get('presence-stop').onclick();await pending;
  assert(calls.some(c=>c.path==='/api/jobs/cancel'));assert.equal(get('request-progress').hidden,true);holdChat=false;
  get('voice-auto-send').checked=true;get('voice-auto-send').onchange();get('prompt').value='';get('dictate').onclick();
  const recognition=vm.runInContext('recognition',context);const result=[{transcript:'Hallo'}];result.isFinal=true;
@@ -115,5 +115,9 @@ class Element{
  await vm.runInContext('speakMarin("Hallo Samet.")',context);
  assert.equal(calls.filter(c=>c.path==='/api/speech').length,billed,'Replay must not generate paid audio again');
  assert(sources.every(source=>source.stopped),'Stop/replay stops every queued audio source');
+ get('presence-motion').onclick();assert.equal(local.get('jarvis.presenceMotion'),'off');assert.equal(get('presence-motion').attrs['aria-label'],'Animation fortsetzen');
+ get('presence-motion').onclick();assert.equal(local.get('jarvis.presenceMotion'),'on');
+ get('presence-close-history').onclick();assert.equal(get('presence-conversation').open,false);
+ get('presence-open-mail').onclick();assert.equal(get('view-mail').hidden,false);
  console.log('Workspace UI: automatic inbox, independent loads, failed refresh retention, navigation/search, inbox summary, local tasks, explicit memory/event confirmation, conflict acknowledgment, cancellation and opt-in voice sending: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1;});
