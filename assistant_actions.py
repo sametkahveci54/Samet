@@ -40,16 +40,19 @@ def local_date(text, now):
 
 def local_event(text, now):
     day = local_date(text, now)
-    hour = re.search(r'\bum\s+(\d{1,2})(?::(\d{2}))?(?:\s*uhr)?\b', text, re.I)
+    hour = re.search(r'\b(?:um\s+(\d{1,2})(?::(\d{2}))?(?:\s*uhr)?|(\d{1,2}):(\d{2})(?:\s*uhr)?|(\d{1,2})\s*uhr)\b', text, re.I)
     if day is None or hour is None: return None
-    title = re.sub(r'^\s*(?:bitte\s+)?(?:trage?|erstelle|plane|lege?)\s+', '', text, flags=re.I)
+    clock_hour = int(hour[1] or hour[3] or hour[5])
+    clock_minute = int(hour[2] or hour[4] or 0)
+    if clock_hour > 23 or clock_minute > 59: raise ValueError('Die Uhrzeit ist ungültig. Bitte beispielsweise 15 Uhr oder 15:30 nennen.')
+    title = re.sub(r'^\s*(?:bitte\s+)?(?:trage?|erstelle?|plane|lege?)\s+', '', text, flags=re.I)
     title = re.sub(r'\b(?:übermorgen|morgen|heute|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b', '', title, flags=re.I)
     title = title.replace(hour[0], '')
     until = re.search(r'\bbis\s+(\d{1,2})(?::(\d{2}))?(?:\s*uhr)?\b', title, re.I)
     until_minutes = None
     if until:
         if int(until[1]) > 23 or int(until[2] or 0) > 59: raise ValueError('Die Enduhrzeit ist ungültig.')
-        until_minutes = ((int(until[1])*60+int(until[2] or 0))-(int(hour[1])*60+int(hour[2] or 0))) % 1440
+        until_minutes = ((int(until[1])*60+int(until[2] or 0))-(clock_hour*60+clock_minute)) % 1440
         if until_minutes == 0: raise ValueError('Bitte unterschiedliche Start- und Enduhrzeiten angeben.')
         title = title.replace(until[0], '')
     title = re.sub(r'\b(?:am\s+)?\d{1,2}\.\d{1,2}\.\d{4}\b|\b\d{4}-\d{2}-\d{2}\b', '', title)
@@ -59,17 +62,20 @@ def local_event(text, now):
         if length and minutes != until_minutes: raise ValueError('Dauer und Enduhrzeit widersprechen sich.')
         minutes = until_minutes
     if length: title = title.replace(length[0], '')
-    title = re.sub(r'\b(?:in|zu)\s+(?:meinen?|den|dem)\s+kalender\b|\b(?:einen?|eine[nm]?|termin\s+namens)\b|\bein[.!]?\s*$', '', title, flags=re.I)
-    calendar_match = re.search(r'\b(?:in|im)\s+(?:(?:meinen?|den)\s+)?kalender\s+(.+)$', title, re.I)
+    if hour.re.search(title): return None
+    title = re.sub(r'\b(?:einen?|eine[nm]?|termin\s+namens)\b|\bein[.!]?\s*$', '', title, flags=re.I)
+    calendar_match = re.search(r'\b(?:in|im|zu)\s+(?:(?:mein(?:e[mn]?)?|den|dem)\s+)?kalender\s+(.+)$', title, re.I)
     calendar_name = ''
     if calendar_match:
         calendar_name = re.sub(r'\s+ein[.!]?\s*$', '', calendar_match[1], flags=re.I).strip(' .,')
         title = title[:calendar_match.start()]
+    title = re.sub(r'\b(?:in|im|zu)\s+(?:(?:mein(?:e[mn]?)?|den|dem)\s+)?kalender\b', '', title, flags=re.I)
     title = re.sub(r'\b(?:am|nächsten|kommenden)\b', '', title, flags=re.I)
     title = re.sub(r'\s+', ' ', title).strip(' .,')
+    title = re.sub(r'^(?:mir\s+)?(?:ein(?:e[nm]?)?\s+)?(?:termin\s+)?(?:für\s+)?(?:(?:beim|bei|zum|zur)\s+)?', '', title, flags=re.I).strip(' .,')
     if not title or title.lower() in ('termin', 'einen termin'): return None
-    return {'title': title, 'date': day.isoformat(), 'time': f'{int(hour[1]):02d}:{int(hour[2] or 0):02d}',
-            'duration_minutes': minutes, 'location': '', 'calendar_name': calendar_name}
+    return {'title': title, 'date': day.isoformat(), 'time': f'{clock_hour:02d}:{clock_minute:02d}',
+            'duration_minutes': minutes, 'location': '', 'calendar_name': calendar_name, 'duration_explicit': bool(length or until)}
 
 
 def event_fields(value):
@@ -123,6 +129,17 @@ def prepare(kind, payload):
 
 
 def handle(path, data, generate):
+    if path == '/api/assistant/calendar':
+        text = personal.text(data.get('text'), 2000, 'Kalenderauftrag')
+        if not re.match(r'^(?:bitte\s+)?(?:trage?|erstelle?|plane|lege?)\b', text, re.I) or not re.search(r'termin|kalender|\bein\b', text, re.I):
+            raise ValueError('Bitte einen ausdrücklichen Kalenderauftrag nennen.')
+        if re.search(r'\b(?:nicht|keinen?|niemals|jeden?|täglich|wöchentlich|monatlich|oder|vielleicht|eventuell)\b', text, re.I):
+            return {'kind': 'calendar_clarify', 'message': 'Bitte einen einzelnen, ausdrücklich gewünschten Termin mit Datum, Uhrzeit und Titel nennen. Es wurde nichts eingetragen.'}
+        value = local_event(text, datetime.now(accounts.BERLIN))
+        if value is None:
+            return {'kind': 'calendar_clarify', 'message': 'Bitte Datum, Uhrzeit und Titel nennen, zum Beispiel: „Erstelle mir einen Termin für morgen 15 Uhr beim Zahnarzt“. Es wurde nichts eingetragen.'}
+        from calendar_action import execute
+        return execute(text, event_fields(value), value.get('calendar_name', ''), data.get('request_id'), not value.get('duration_explicit', False))
     if path == '/api/assistant/confirm':
         identifier = data.get('confirmation')
         with LOCK:

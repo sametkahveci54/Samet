@@ -19,6 +19,7 @@ $('presence-open-mail').onclick=()=>activateView('mail');
 $('presence-open-calendar').onclick=()=>activateView('calendar');
 $('presence-open-tasks').onclick=()=>activateView('tasks');
 $('presence-stop').onclick=()=>{
+  if(typeof calendarOrderRunning!=='undefined'&&calendarOrderRunning){$('speech-status').textContent='Der Kalenderauftrag läuft bereits. Bitte das Ergebnis abwarten; ein Speicherzugriff kann nicht zuverlässig zurückgerufen werden.';return;}
   allowAutoSend=false;if(listening)recognition?.abort();
   if(busy)$('cancel-requests').click();
   stopAudio();$('speech-status').textContent='Gestoppt.';

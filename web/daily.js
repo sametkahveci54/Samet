@@ -19,7 +19,7 @@ $('task-count').onclick=()=>go('tasks-panel');
 function calendarChoices(values){
   calendarOptions=values.filter(c=>c.writable);
   const select=$('default-calendar'),previous=personalState?.preferences.default_calendar||'';
-  select.replaceChildren(node('option','Bei jedem Vorschlag auswählen'));select.firstChild.value='';
+  select.replaceChildren(node('option','Bei mehreren Kalendern nachfragen'));select.firstChild.value='';
   for(const calendar of calendarOptions){const option=node('option',calendar.name);option.value=calendar.id;select.append(option);}
   if(calendarOptions.some(c=>c.id===previous)){
     select.value=previous;
@@ -157,7 +157,29 @@ $('test-connections').onclick=async()=>{
   catch(error){$('system-feedback').textContent=error.message;}
   finally{button.disabled=false;}
 };
+const calendarRequestIds=new Map();
+let calendarOrderRunning=false;
+async function executeCalendarOrder(text){
+  const key=berlinDay(new Date())+'|'+text.trim();
+  if(!calendarRequestIds.has(key)){
+    if(calendarRequestIds.size>=50)calendarRequestIds.delete(calendarRequestIds.keys().next().value);
+    calendarRequestIds.set(key,Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''));
+  }
+  calendarOrderRunning=true;
+  let value;
+  try{value=await api('/api/assistant/calendar',{text,request_id:calendarRequestIds.get(key)});}
+  finally{calendarOrderRunning=false;}
+  if(value.kind==='event')return await presentProposal(value);
+  if(value.kind==='calendar_setup'){
+    $('icloud-feedback').textContent=value.message;go('icloud-connect');$('icloud-email').focus();
+  }
+  if(value.kind==='calendar_saved'){
+    if(typeof refreshCalendar==='function')refreshCalendar().catch(()=>{});
+  }
+  return value.message;
+}
 async function dailyAnswer(text){
+  if(/^(bitte\s+)?(trag[e]?|erstelle?|plane|leg[e]?)\b/i.test(text)&&/termin|kalender|\bein\b/i.test(text)&&! /\baufgabe\b/i.test(text))return await executeCalendarOrder(text);
   if(/^(bitte\s+)?(trag[e]?|erstelle|plane|leg[e]?|merke?|notiere|speichere)\b/i.test(text)){
     const value=await api('/api/assistant/plan',{text});
     if(value.kind!=='none')return await presentProposal(value);

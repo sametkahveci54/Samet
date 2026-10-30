@@ -24,7 +24,7 @@ class Element{
  const start=new Date(Date.now()+86400000),end=new Date(start.getTime()+3600000);
  const event={title:'Werkstatt',start:start.toISOString(),end:end.toISOString(),location:'Berlin',reminder:15,
   calendar:'Privat',calendar_id:'https://p01-caldav.icloud.com/123/test/',conflicts:[],conflict_warnings:[],buffer_minutes:0,all_day:false};
- let conflicts=false,holdChat=false,failMail=false,holdCalendar=false,calendarRelease=null;
+ let conflicts=false,holdChat=false,failMail=false,holdCalendar=false,calendarRelease=null,calendarDirect=false;
  const clone=value=>JSON.parse(JSON.stringify(value));
  async function fetch(url,options={}){
   const data=options.body?JSON.parse(options.body):{};calls.push({path:url,data:clone(data)});
@@ -42,6 +42,7 @@ class Element{
   else if(url==='/api/mail/summary'||url==='/api/mail/important-summary')value={summary:'Ein Termin wurde bestätigt.',count:1};
   else if(url==='/api/personal/state')value=personal;
   else if(url==='/api/personal/task/add'){personal.tasks.push({id:'task-id',title:data.title,due:data.due,done:false});value={message:'Gespeichert.',state:personal};}
+  else if(url==='/api/assistant/calendar')value=calendarDirect?{kind:'calendar_saved',event,message:'In iCloud eingetragen: Zahnarzt · morgen 15:00 Uhr.'}:{kind:'event',fields:event,calendar_hint:'',message:'Kalender auswählen.'};
   else if(url==='/api/assistant/plan')value=/^trag/i.test(data.text)?{kind:'event',fields:event,message:'Bitte Vorschau prüfen.'}:/^merke/i.test(data.text)?{kind:'memory',payload:{text:'Kurze Antworten'},confirmation:'memory-token',message:'Bitte bestätigen.'}:{kind:'none'};
   else if(url==='/api/assistant/confirm'){personal.memories.push({id:'memory-id',text:'Kurze Antworten'});value={message:'Gespeichert.',state:personal};}
   else if(url==='/api/chat'){
@@ -86,6 +87,14 @@ class Element{
  conflicts=true;await get('event-form').requestSubmit();await get('event-confirm').onclick();
  assert.equal(calls.filter(c=>c.path==='/api/calendar/create').length,1,'Conflict requires extra acknowledgment');
  get('conflict-ack').checked=true;await get('event-confirm').onclick();assert.equal(calls.filter(c=>c.path==='/api/calendar/create').length,2);
+ calendarDirect=true;const writesBefore=calls.filter(c=>c.path==='/api/calendar/create').length;
+ get('prompt').value='Erstelle mir ein Termin für morgen 15 Uhr beim Zahnarzt';await get('chat-form').requestSubmit();await flush();
+ assert(get('messages').textContent.includes('In iCloud eingetragen: Zahnarzt'));
+ const firstId=calls.filter(c=>c.path==='/api/assistant/calendar').at(-1).data.request_id;
+ get('prompt').value='Erstelle mir ein Termin für morgen 15 Uhr beim Zahnarzt';await get('chat-form').requestSubmit();await flush();
+ assert.equal(calls.filter(c=>c.path==='/api/assistant/calendar').at(-1).data.request_id,firstId,'Same calendar retry reuses the request identity');
+ assert.equal(calls.filter(c=>c.path==='/api/calendar/create').length,writesBefore,'Frontend never issues a second calendar write for an executed order');
+ calendarDirect=false;
  holdChat=true;get('prompt').value='Erzähle mir etwas';const pending=get('chat-form').requestSubmit();await flush();
  assert.equal(get('request-progress').hidden,false);assert(get('presence-caption-description').textContent.includes('bearbeitet'));get('presence-stop').onclick();await pending;
  assert(calls.some(c=>c.path==='/api/jobs/cancel'));assert.equal(get('request-progress').hidden,true);holdChat=false;

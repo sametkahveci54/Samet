@@ -10,7 +10,7 @@ import server
 
 class HTTPTests(unittest.TestCase):
     def test_online_voice_endpoints_require_session_token(self):
-        for path, data in [('/api/voice/config', {'action': 'status'}),
+        for path, data in [('/api/assistant/calendar', {'text':'Erstelle morgen 15 Uhr Zahnarzttermin','request_id':'a'*32}),('/api/voice/config', {'action': 'status'}),
                            ('/api/speech', {'voice': 'marin', 'text': 'Hallo', 'rate': 1})]:
             status, _ = self.request('POST', path, data)
             self.assertEqual(status, 403)
