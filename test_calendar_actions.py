@@ -22,7 +22,7 @@ class CalendarActionTests(unittest.TestCase):
         self.vault=patch.object(accounts,'Keychain');self.key=self.vault.start();self.addCleanup(self.vault.stop)
         self.key.return_value.get.return_value={'email':'test@example.invalid','password':'test-app-password'}
         p=patch.object(accounts,'ICloud');self.cloud=p.start().return_value;self.addCleanup(p.stop)
-        self.calendar={'id':'https://p01-caldav.icloud.com/123/private/','name':'Privat','writable':True}
+        self.calendar={'id':'https://p01-caldav.icloud.com/123/private/','name':'Arbeit','writable':True}
         self.cloud.calendars.return_value=[self.calendar]
         self.cloud.events.return_value={'events':[],'warnings':[]}
         self.generate=MagicMock()
@@ -61,12 +61,12 @@ class CalendarActionTests(unittest.TestCase):
 
     def test_exact_short_user_sentence_uses_tomorrow_without_model(self):
         result=self.run_order('Termin 15 Uhr morgen mit Samet')
-        self.assertEqual(result['kind'],'event')
-        start=datetime.fromisoformat(result['fields']['start'])
+        self.assertEqual(result['kind'],'calendar_saved')
+        start=datetime.fromisoformat(result['event']['start'])
         self.assertEqual(start.date(),(datetime.now(accounts.BERLIN)+timedelta(days=1)).date())
         self.assertEqual(start.hour,15)
-        self.assertEqual(result['fields']['title'],'mit Samet')
-        self.generate.assert_not_called();self.cloud.create.assert_not_called()
+        self.assertEqual(result['event']['title'],'mit Samet')
+        self.generate.assert_not_called();self.cloud.create.assert_called_once()
 
     def test_short_entry_without_date_clarifies_instead_of_chat(self):
         self.assertEqual(self.run_order('Termin 15 Uhr mit Samet')['kind'],'calendar_clarify')
@@ -77,28 +77,34 @@ class CalendarActionTests(unittest.TestCase):
         self.assertEqual(self.run_order()['kind'],'calendar_setup')
         self.cloud.create.assert_not_called();self.assertFalse(self.file.exists())
 
-    def test_multiple_calendars_need_one_choice(self):
-        self.cloud.calendars.return_value.append({**self.calendar,'id':self.calendar['id']+'work/','name':'Arbeit'})
-        self.assertEqual(self.run_order()['kind'],'event');self.cloud.create.assert_not_called()
+    def test_missing_or_duplicate_work_calendar_never_uses_another_calendar(self):
+        for calendars in [[{**self.calendar,'name':'Privat'}],[self.calendar,{**self.calendar,'id':self.calendar['id']+'other/'}]]:
+            self.cloud.calendars.return_value=calendars
+            self.assertEqual(self.run_order()['kind'],'calendar_unavailable')
+        self.cloud.create.assert_not_called()
 
-    def test_preferred_calendar_is_used(self):
-        work={**self.calendar,'id':self.calendar['id']+'work/','name':'Arbeit'}
-        self.cloud.calendars.return_value.append(work)
-        personal.handle('/api/personal/preferences',{'tone':'kurz','default_calendar':work['id']})
-        self.assertEqual(self.run_order()['event']['calendar_id'],work['id'])
-
-    def test_explicit_calendar_name_is_preserved(self):
-        work={**self.calendar,'id':self.calendar['id']+'work/','name':'Arbeit'}
-        self.cloud.calendars.return_value.append(work)
-        result=self.run_order('Erstelle morgen 15 Uhr Zahnarzt in meinem Kalender Arbeit')
-        self.assertEqual(result['event']['calendar_id'],work['id'])
+    def test_work_calendar_overrides_old_default_and_hint(self):
+        private={**self.calendar,'id':self.calendar['id']+'private/','name':'Privat'}
+        self.cloud.calendars.return_value.append(private)
+        personal.handle('/api/personal/preferences',{'tone':'kurz','default_calendar':private['id']})
+        result=self.run_order('Erstelle morgen 15 Uhr Zahnarzt in meinem Kalender Privat')
+        self.assertEqual(result['event']['calendar_id'],self.calendar['id'])
+        self.assertEqual(result['event']['calendar'],'Arbeit')
         self.assertEqual(result['event']['title'],'Zahnarzt')
 
-    def test_conflicts_and_incomplete_calendar_require_review(self):
-        for result in [{'events':[{'title':'Anderer Termin'}],'warnings':[]},{'events':[],'warnings':['Kalender unvollständig']}]:
-            self.cloud.events.return_value=result
-            self.assertEqual(self.run_order()['kind'],'event')
-        self.cloud.create.assert_not_called();self.assertFalse(self.file.exists())
+    def test_conflicts_do_not_require_second_confirmation(self):
+        self.cloud.events.return_value={'events':[{'title':'Anderer Termin'}],'warnings':[]}
+        result=self.run_order()
+        self.assertEqual(result['kind'],'calendar_saved')
+        self.assertIn('überschneidet',result['message'])
+        self.cloud.create.assert_called_once()
+
+    def test_incomplete_conflict_check_is_only_a_notice(self):
+        self.cloud.events.return_value={'events':[],'warnings':['Kalender unvollständig']}
+        result=self.run_order()
+        self.assertEqual(result['kind'],'calendar_saved')
+        self.assertIn('unvollständig',result['message'])
+        self.cloud.create.assert_called_once()
 
     def test_unknown_write_status_never_claims_success_or_retries(self):
         self.cloud.create.side_effect=accounts.ConnectionError('Zeitlimit')

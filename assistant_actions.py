@@ -139,8 +139,6 @@ def handle(path, data, generate):
         value = local_event(text, datetime.now(accounts.BERLIN))
         if value is None:
             return {'kind': 'calendar_clarify', 'message': 'Bitte Datum, Uhrzeit und Titel nennen, zum Beispiel: „Erstelle mir einen Termin für morgen 15 Uhr beim Zahnarzt“. Es wurde nichts eingetragen.'}
-        if short_order:
-            return plan_event(value, 'Kurze Termineingabe; bitte vor dem Eintragen bestätigen.')
         from calendar_action import execute
         return execute(text, event_fields(value), value.get('calendar_name', ''), data.get('request_id'), not value.get('duration_explicit', False))
     if path == '/api/assistant/confirm':

@@ -54,22 +54,18 @@ def execute(text, fields, hint, request_id, implicit_duration=True):
         except accounts.ConnectionError as error:
             return {'kind': 'calendar_unavailable', 'message': str(error) + ' Es wurde kein neuer Termin eingetragen.'}
         writable = [c for c in calendars if c['writable']]
-        default = personal.load()['preferences']['default_calendar']
-        if hint:
-            matches = [c for c in writable if c['name'].casefold() == hint.casefold()]
-            selected = matches[0] if len(matches) == 1 else None
-        else:
-            selected = next((c for c in writable if c['id'] == default), None) if default else writable[0] if len(writable) == 1 else None
+        # Samet's standing instruction: all assistant orders go to Arbeit,
+        # without a second confirmation, even when another default is saved.
+        matches = [c for c in writable if c['name'].strip().casefold() == 'arbeit']
+        selected = matches[0] if len(matches) == 1 else None
         if selected is None:
-            return choice(fields, hint, 'Bitte einmal den gewünschten iCloud-Kalender auswählen. Einen bevorzugten Kalender kannst du unter Einstellungen hinterlegen. Es wurde noch nichts eingetragen.')
+            return {'kind':'calendar_unavailable','message':'Der beschreibbare iCloud-Kalender „Arbeit“ fehlt oder ist nicht eindeutig. Es wurde nichts eingetragen. Bitte den Kalender in iCloud prüfen.'}
         event = accounts.event_preview({**fields, 'calendar_id': selected['id']}, calendars)
         fingerprint = hashlib.sha256(json.dumps([credentials['email'],event['calendar_id'],event['title'],event['start'],event['end']],ensure_ascii=False).encode()).hexdigest()
         # A network interruption must not lead to a second, possibly duplicate PUT.
         previous = next((r for r in receipts.values() if r.get('fingerprint') == fingerprint), None)
         if previous: return previous['result']
         event.update(accounts.conflict_check(cloud, event, calendars))
-        if event['conflicts'] or event['conflict_warnings']:
-            return choice(fields, selected['name'], 'Es gibt eine Überschneidung oder die Kalenderprüfung ist unvollständig. Bitte die Hinweise ansehen und ausdrücklich bestätigen.')
         if len(receipts) >= 100:
             completed = [key for key, value in receipts.items() if value['result']['kind'] == 'calendar_saved']
             if not completed: raise ValueError('Bitte zuerst offene Kalenderaufträge prüfen. Es wurde nichts neu eingetragen.')
@@ -88,6 +84,10 @@ def execute(text, fields, hint, request_id, implicit_duration=True):
             return uncertain
         result = {'kind':'calendar_saved','event':event,
             'message':'In iCloud eingetragen: '+summary+'. '+('Ohne genannte Dauer sind 60 Minuten vorgesehen. ' if implicit_duration else '')+'Auf deinem iPhone erscheint der Termin, wenn dieser iCloud-Kalender dort synchronisiert wird.'}
+        if event['conflicts']:
+            result['message'] += ' Hinweis: Der Termin überschneidet sich mit einem bestehenden Termin.'
+        if event['conflict_warnings']:
+            result['message'] += ' Hinweis: Die Prüfung auf Überschneidungen war unvollständig.'
         receipts[request_id]['result'] = result
         try: store_receipts(receipts)
         except OSError:

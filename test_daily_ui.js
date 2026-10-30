@@ -95,10 +95,14 @@ class Element{
  assert.equal(calls.filter(c=>c.path==='/api/assistant/calendar').at(-1).data.request_id,firstId,'Same calendar retry reuses the request identity');
  assert.equal(calls.filter(c=>c.path==='/api/calendar/create').length,writesBefore,'Frontend never issues a second calendar write for an executed order');
  calendarDirect=false;
+ calendarDirect=true;
+ const shortPreviewsBefore=calls.filter(c=>c.path==='/api/calendar/preview').length;
  const shortChatBefore=calls.filter(c=>c.path==='/api/chat').length;
  get('prompt').value='Termin 15 Uhr morgen mit Samet';await get('chat-form').requestSubmit();await flush();
  assert.equal(calls.filter(c=>c.path==='/api/assistant/calendar').at(-1).data.text,'Termin 15 Uhr morgen mit Samet');
  assert.equal(calls.filter(c=>c.path==='/api/chat').length,shortChatBefore,'Short appointment stays out of generic model chat');
+ assert.equal(calls.filter(c=>c.path==='/api/calendar/preview').length,shortPreviewsBefore,'Short orders do not open a second confirmation');
+ calendarDirect=false;
  holdChat=true;get('prompt').value='Erzähle mir etwas';const pending=get('chat-form').requestSubmit();await flush();
  assert.equal(get('request-progress').hidden,false);assert(get('presence-caption-description').textContent.includes('bearbeitet'));get('presence-stop').onclick();await pending;
  assert(calls.some(c=>c.path==='/api/jobs/cancel'));assert.equal(get('request-progress').hidden,true);holdChat=false;

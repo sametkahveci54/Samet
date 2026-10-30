@@ -18,13 +18,12 @@ $('priority-count').onclick=()=>go('mail-filter');
 $('task-count').onclick=()=>go('tasks-panel');
 function calendarChoices(values){
   calendarOptions=values.filter(c=>c.writable);
-  const select=$('default-calendar'),previous=personalState?.preferences.default_calendar||'';
-  select.replaceChildren(node('option','Bei mehreren Kalendern nachfragen'));select.firstChild.value='';
-  for(const calendar of calendarOptions){const option=node('option',calendar.name);option.value=calendar.id;select.append(option);}
-  if(calendarOptions.some(c=>c.id===previous)){
-    select.value=previous;
-    if(!$('event-calendar').value)$('event-calendar').value=previous;
-  }
+  const select=$('default-calendar');
+  const work=calendarOptions.filter(c=>c.name.trim().toLocaleLowerCase('de-DE')==='arbeit');
+  const option=node('option',work.length===1?'Arbeit · automatisch speichern':'Arbeit · Verfügbarkeit wird beim Auftrag geprüft');
+  option.value=work.length===1?work[0].id:'';
+  select.replaceChildren(option);select.disabled=true;
+  if(work.length===1&&!$('event-calendar').value)$('event-calendar').value=work[0].id;
 }
 function renderTasks(){
   const tasks=personalState.tasks;
