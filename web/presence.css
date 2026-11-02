@@ -158,3 +158,14 @@ body[data-state=speaking] .presence-state{color:#b6dbdf}body[data-state=speaking
 @media(max-width:800px){.presence-conversation-body{width:100%;height:48svh;max-height:none;top:auto;padding:12px}.presence-input{padding-bottom:env(safe-area-inset-bottom,8px)}.presence-conversation-body .message{font-size:.88rem}}
 
 @media(max-width:500px){.presence-input .compose{display:flex;flex-wrap:wrap}.presence-input .compose #dictate,.presence-input .compose #send{flex:0 0 auto;width:auto;align-self:auto}.presence-input .compose #dictate{margin-left:auto}.presence-conversation-body{height:38svh}}
+
+/* Enforce scroll layout through the CSP-approved stylesheet. */
+
+.presence-heading{flex-wrap:wrap}.presence-header-actions{display:contents}
+#presence-conversation{order:2;flex:0 0 100%;min-width:0}
+.presence-conversation-body{position:relative!important;inset:auto!important;width:100%!important;height:40svh!important;max-height:480px!important;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;margin:8px 0 14px}
+.presence-conversation-heading{flex:0 0 auto}
+.presence-conversation-body #messages{display:block;flex:1 1 auto;min-height:0;overflow-y:auto!important;overflow-x:hidden!important;max-height:none;overscroll-behavior-y:contain}
+.presence-shell:has(#presence-conversation[open]) .presence-space,.presence-shell:has(#presence-conversation[open]) .presence-caption{display:none}
+.presence-input{position:relative!important;inset:auto!important}
+
