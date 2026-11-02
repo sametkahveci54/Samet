@@ -1,0 +1,30 @@
+/* Warm graphite, sand and amber. Loaded after existing layout styles. */
+:root{--bg:#191715;--paper:#24211e;--raised:#2d2823;--subtle:#302a24;--ink:#f0e4d3;--muted:#b6a38c;--primary:#dfb578;--accent-soft:#423323;--line:#514336;--hero:linear-gradient(130deg,#30271f,#24211e)}
+:root[data-theme=light]{--bg:#f4ecdf;--paper:#fffaf2;--raised:#f6eddf;--subtle:#efe3d1;--ink:#382e23;--muted:#786752;--primary:#8d5c25;--accent-soft:#f1dfc4;--line:#d9c7ae}
+body[data-view=assistant]{--presence-bg:#191715;--presence-cyan:#dfbd8d;--presence-gold:#e7b866;background:var(--presence-bg)}
+body[data-view=assistant] .app-shell{background:var(--presence-bg)}
+body[data-view=assistant] .sidebar{background:#141311;border-color:#493b2d}
+body[data-view=assistant] .topbar,body[data-view=assistant] .workspace-content{background:transparent}
+body[data-view=assistant] .presence-input{background:var(--presence-bg)}
+.presence-input .compose,.presence-conversation-body,.presence-tools-body,.presence-actions-body{background:#24201c!important;border-color:#574633!important;color:#f0e4d3}
+.presence-conversation-body .message,.presence-conversation-body .message.user,.presence-conversation-body .message.assistant{background:#2d2721;border-color:#544434;color:#f0e4d3}
+.presence-wordmark>span,.presence-caption h2,.presence-input .compose textarea{color:#f0e4d3}
+.presence-state,.presence-caption>p,.presence-conversation-heading,.presence-conversation-body .message>strong,.presence-conversation-body .message.assistant>strong,body[data-view=assistant] .nav-item,body[data-view=assistant] .topbar h1{color:#c6ac88}
+.presence-input #send,#quick-appointment-submit{background:#dfb578;border-color:#dfb578;color:#281e13}
+.presence-input #dictate,.presence-shortcuts>button,.presence-shortcuts>details>summary,#presence-conversation>summary{color:#c5ac8e}
+body[data-view=assistant] .brand-mark{background:#3c3023;border-color:#735735;color:#f0d2a6}
+#presence-canvas{filter:hue-rotate(235deg) saturate(.65)}
+#quick-appointment{width:min(420px,calc(100vw - 32px));box-sizing:border-box;max-height:85dvh;overflow-y:auto;border:1px solid var(--line);border-radius:16px;background:var(--paper);color:var(--ink);padding:24px}
+#quick-appointment::backdrop{background:#0009;backdrop-filter:blur(4px)}
+#quick-appointment form{display:grid;gap:10px}
+#quick-appointment p{font-size:.85rem;line-height:1.6;color:var(--muted)}
+#quick-appointment input{width:100%;min-width:0;box-sizing:border-box;background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:11px;font:inherit;font-size:16px}
+.quick-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.quick-heading h2{font-size:1.1rem;margin:0}.quick-heading button{padding:8px;background:transparent;color:var(--muted);border:0}
+#quick-appointment-open{font-size:.76rem;padding:8px 10px;white-space:nowrap;background:var(--accent-soft);border:1px solid var(--line);color:var(--ink);border-radius:8px}
+:root[data-theme=light] body[data-view=assistant]{--presence-bg:#f4ecdf}
+:root[data-theme=light] body[data-view=assistant] .sidebar{background:#eee2d1}
+:root[data-theme=light] .presence-input .compose,:root[data-theme=light] .presence-conversation-body,:root[data-theme=light] .presence-tools-body,:root[data-theme=light] .presence-actions-body{background:#fffaf2!important;color:#382e23!important;border-color:#d9c7ae!important}
+:root[data-theme=light] .presence-conversation-body .message{background:#f5ebdb;color:#382e23;border-color:#ddc9ab}
+:root[data-theme=light] .presence-wordmark>span,:root[data-theme=light] .presence-caption h2,:root[data-theme=light] .presence-input .compose textarea{color:#382e23}
+@media(max-width:500px){#quick-appointment{padding:18px}.topbar-right{gap:6px}#quick-appointment-open{font-size:.7rem;padding:7px}}
