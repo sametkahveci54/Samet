@@ -28,3 +28,23 @@ body[data-view=assistant] .brand-mark{background:#3c3023;border-color:#735735;co
 :root[data-theme=light] .presence-conversation-body .message{background:#f5ebdb;color:#382e23;border-color:#ddc9ab}
 :root[data-theme=light] .presence-wordmark>span,:root[data-theme=light] .presence-caption h2,:root[data-theme=light] .presence-input .compose textarea{color:#382e23}
 @media(max-width:500px){#quick-appointment{padding:18px}.topbar-right{gap:6px}#quick-appointment-open{font-size:.7rem;padding:7px}}
+
+/* Shared palette for every view, including the higher-specificity dark theme. */
+:root,:root[data-theme=dark]{--canvas:#191715;--bg:#191715;--sidebar:#141311;--paper:#24211e;--raised:#2d2823;--subtle:#302a24;--ink:#f0e4d3;--muted:#b6a38c;--primary:#dfb578;--primary-dark:#efca96;--accent-soft:#423323;--line:#514336;--good:#b6bc8e;--hero:linear-gradient(130deg,#30271f,#24211e)}
+:root[data-theme=light]{--canvas:#f4ecdf;--bg:#f4ecdf;--sidebar:#ece0ce;--paper:#fffaf2;--raised:#f6eddf;--subtle:#efe3d1;--ink:#382e23;--muted:#786752;--primary:#8d5c25;--primary-dark:#704415;--accent-soft:#f1dfc4;--line:#d9c7ae;--good:#637044;--hero:linear-gradient(130deg,#f6e7d1,#fffaf2)}
+html,body,.app-shell,.topbar{background:var(--canvas);color:var(--ink)}
+.sidebar{background:var(--sidebar)}
+.brand-mark{background:linear-gradient(145deg,#705435,#3c3023);color:#f6e3c5;border-color:#92704a}
+.nav-item{color:var(--muted)}
+.nav-item[aria-current=page]{background:var(--accent-soft);border-color:var(--line);color:var(--ink)}
+.nav-item:hover,.sidebar-search:hover{color:var(--primary);background:var(--accent-soft)}
+.nav-item .nav-badge,.profile-mark,.stat-icon,.date-mark,.mail-avatar{background:var(--subtle);border-color:var(--line);color:var(--primary)}
+.sidebar-search,.sidebar-bottom small,.nav-label,.sidebar-search kbd{color:var(--muted)}
+.primary,button[type=submit]{background:var(--primary);border-color:var(--primary);color:var(--canvas)}
+.primary:hover,button[type=submit]:hover{background:var(--primary-dark);border-color:var(--primary-dark)}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{outline-color:var(--primary)}
+.mail-row[aria-pressed=true]{background:var(--accent-soft);border-left-color:var(--primary)}
+#mail-summary,.daily-strip>button:hover,.suggestion-row button:hover,.assistant-link,.command-result[aria-selected=true]{background:var(--accent-soft);border-color:var(--line);color:var(--ink)}
+.command-hero::before{background:radial-gradient(ellipse,#c6984620,transparent 66%)}
+.command-hero form,.mail-toolbar input,.mail-toolbar select,.command-dialog,.command-results{background:var(--paper);color:var(--ink);border-color:var(--line)}
+.status-pill,.connection-row,.compact-item,.task-row,.memory-row{border-color:var(--line)}
