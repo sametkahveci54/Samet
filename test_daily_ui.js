@@ -75,6 +75,16 @@ class Element{
  get('mail-list').firstChild.onclick();await get('mail-summarize').onclick();assert(get('mail-summary').textContent.includes('Ein Termin'));
  const untouched=calls.length;
  assert.equal(await vm.runInContext('dailyAnswer("Warum sind deine Antworten manchmal langsam?")',context),null);
+ const messagePane=get('messages');
+ messagePane.scrollHeight=2000;messagePane.clientHeight=300;messagePane.scrollTop=100;
+ vm.runInContext('add("assistant","Antwort während du ältere Nachrichten liest")',context);
+ assert.equal(messagePane.scrollTop,100,'Incoming answer preserves reading position');
+ messagePane.scrollTop=1700;
+ vm.runInContext('add("assistant","Neue Antwort am Ende")',context);
+ assert.equal(messagePane.scrollTop,2000,'Follow answers only when already at bottom');
+ messagePane.scrollTop=0;
+ vm.runInContext('add("user","Eigene neue Nachricht")',context);
+ assert.equal(messagePane.scrollTop,2000,'Own message returns to latest conversation');
  assert.equal(await vm.runInContext('dailyAnswer("Erkläre mir, wie Mailzusammenfassungen funktionieren")',context),null);
  assert.equal(calls.length,untouched,'Unrelated questions must not read mail or create drafts');
  get('task-title').value='Werkstatt anrufen';get('task-due').value='2026-12-01';await get('task-form').requestSubmit();assert(get('task-count').textContent.includes('1 offen'));

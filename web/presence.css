@@ -136,3 +136,25 @@ body[data-state=speaking] .presence-state{color:#b6dbdf}body[data-state=speaking
 .presence-space{margin-bottom:6px}
 @media(max-width:800px){.presence-space{margin-bottom:8px}}
 @media(max-width:500px){.presence-input #dictate{width:auto;flex:0 1 auto;align-self:auto;margin-left:0;margin-right:auto;min-width:100px}.presence-input #send{flex:0 0 auto}}
+
+/* Conversation stays in document flow, with one bounded message scroller.
+   It must never cover the composer, including on short/mobile viewports. */
+.presence-heading{flex-wrap:wrap}
+.presence-header-actions{display:contents}
+#presence-motion{margin-left:auto}
+#presence-conversation{order:2;flex:0 0 100%;min-width:0}
+#presence-conversation>summary{justify-content:flex-end}
+.presence-conversation-body{position:relative;inset:auto;width:100%;height:min(52svh,520px);max-height:none;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;margin:8px 0 14px;padding:16px}
+.presence-conversation-heading{flex:0 0 auto}
+.presence-conversation-body #messages{display:block;flex:1 1 auto;min-height:0;min-width:0;max-height:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#416267 transparent;scrollbar-gutter:stable;padding-right:6px;touch-action:pan-y pinch-zoom}
+.presence-conversation-body .message{min-width:0;max-width:100%;height:auto;min-height:0;overflow-wrap:anywhere;word-break:normal;white-space:pre-wrap;margin:0 0 12px}
+.presence-conversation-body .message:last-child{margin-bottom:0}
+.presence-conversation-body .proposal-card{flex:0 0 auto;max-height:40%;overflow-y:auto;margin-bottom:12px}
+.presence-conversation-body .assistant-starters{flex:0 0 auto}
+.presence-shell:has(#presence-conversation[open]) .presence-space,.presence-shell:has(#presence-conversation[open]) .presence-caption{display:none}
+.presence-input{position:relative;bottom:auto;padding-bottom:8px;background:var(--presence-bg)}
+:root[data-theme=light] .presence-input{background:var(--paper)}
+.presence-input .compose textarea{min-width:0;overflow-y:auto}
+@media(max-width:800px){.presence-conversation-body{width:100%;height:48svh;max-height:none;top:auto;padding:12px}.presence-input{padding-bottom:env(safe-area-inset-bottom,8px)}.presence-conversation-body .message{font-size:.88rem}}
+
+@media(max-width:500px){.presence-input .compose{display:flex;flex-wrap:wrap}.presence-input .compose #dictate,.presence-input .compose #send{flex:0 0 auto;width:auto;align-self:auto}.presence-input .compose #dictate{margin-left:auto}.presence-conversation-body{height:38svh}}

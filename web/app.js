@@ -126,7 +126,12 @@ function add(role, text) {
   const el = document.createElement('article'); el.className = 'message ' + role;
   const name = document.createElement('strong'); name.textContent = role === 'user' ? 'Du' : 'Jarvis'; el.append(name, document.createTextNode(text));
   if(role === 'assistant') { const b = document.createElement('button'); b.className = 'quiet'; b.textContent = '▷ Vorlesen'; b.onclick = () => speak(text); el.append(b); }
-  $('messages').append(el); el.scrollIntoView({behavior:'smooth',block:'nearest'}); return el;
+  const messages=$('messages');
+  const follow=role==='user'||messages.scrollHeight-messages.scrollTop-messages.clientHeight<60;
+  messages.append(el);
+  // Scroll only the conversation, never the page or the composer out of reach.
+  if(follow)messages.scrollTop=messages.scrollHeight;
+  return el;
 }
 $('chat-form').onsubmit = async e => {
   e.preventDefault(); const text = $('prompt').value.trim(); if (!text || busy) return;
