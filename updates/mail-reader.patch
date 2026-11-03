@@ -1,0 +1,172 @@
+diff --git a/integrations.py b/integrations.py
+index fd0a7b0..e0c1576 100644
+--- a/integrations.py
++++ b/integrations.py
+@@ -539,6 +539,9 @@ def handle(path, data, generate):
+                 item['id'] = secrets.token_urlsafe(18)
+                 MAIL_CACHE[item['id']] = (time.monotonic(), item)
+             return {'messages': [{k:v for k,v in item.items() if not k.startswith('_imap_')} for item in items], 'note': 'Die neuesten 20 Mails. Einordnung anhand einfacher Regeln, keine zuverlässige Spamprüfung. Geöffnete Mails werden bei Yahoo als gelesen markiert.'}
++        if path == '/api/mail/detail':
++            from mail_reader import read_message
++            return read_message(connection(vault, 'yahoo'), cached_mail(data.get('id')), ConnectionError)
+         if path == '/api/mail/read':
+             item = cached_mail(data.get('id'))
+             creds = connection(vault, 'yahoo')
+diff --git a/mail_reader.py b/mail_reader.py
+new file mode 100644
+index 0000000..44a273a
+--- /dev/null
++++ b/mail_reader.py
+@@ -0,0 +1,107 @@
++"""Read a single selected Yahoo message and extract a compact text-only overview."""
++import email
++from email import policy
++from html.parser import HTMLParser
++import imaplib
++import re
++import ssl
++
++
++class HtmlText(HTMLParser):
++    blocks = {'p', 'div', 'br', 'li', 'tr', 'blockquote', 'section', 'h1', 'h2', 'h3'}
++
++    def __init__(self):
++        super().__init__(convert_charrefs=True)
++        self.parts = []
++        self.hidden = 0
++
++    def handle_starttag(self, tag, attrs):
++        if tag in {'script', 'style', 'head'}:
++            self.hidden += 1
++        if not self.hidden and tag in self.blocks:
++            self.parts.append('\n')
++
++    def handle_endtag(self, tag):
++        if tag in {'script', 'style', 'head'}:
++            self.hidden = max(0, self.hidden - 1)
++        if not self.hidden and tag in self.blocks:
++            self.parts.append('\n')
++        if tag in {'td', 'th'}:
++            self.parts.append(' ')
++
++    def handle_data(self, data):
++        if not self.hidden:
++            self.parts.append(re.sub(r'\s+', ' ', data))
++
++
++def body_text(part):
++    if part.get_content_disposition() == 'attachment' or part.get_filename():
++        return ''
++    kind = part.get_content_type()
++    if kind == 'multipart/alternative':
++        for child in sorted(part.iter_parts(), key=lambda p: p.get_content_type() != 'text/plain'):
++            text = body_text(child)
++            if text:
++                return text
++        return ''
++    if kind == 'multipart/related':
++        root = part.get_body(preferencelist=('related',))
++        if root is part:
++            children = list(part.iter_parts())
++            start = part.get_param('start')
++            child = next((p for p in children if start and p.get('Content-ID') == start), None)
++            return body_text(child or children[0]) if children else ''
++    if kind.startswith('multipart/'):
++        return '\n\n'.join(filter(None, map(body_text, part.iter_parts())))
++    if kind not in {'text/plain', 'text/html'}:
++        return ''
++    try:
++        text = part.get_content()
++    except LookupError:
++        text = (part.get_payload(decode=True) or b'').decode('utf-8', 'replace')
++    if kind == 'text/html':
++        parser = HtmlText()
++        parser.feed(text)
++        parser.close()
++        text = re.sub(r'\n(?:[ \t]*\n){2,}', '\n\n', ''.join(parser.parts))
++    return text.replace('\r\n', '\n').strip()
++
++
++def highlights(text):
++    sentences = [s.strip() for s in re.split(r'\n+|(?<=[.!?])\s+(?=[A-ZÄÖÜ])', text) if s.strip()]
++    cues = r'\b(bitte|frist|bis zum|betrag|termin|fällig|deadline|please|due|lieferung|bestätigung)\b|\d+[.,]\d{2}\s*(€|EUR)|\d{1,2}[./]\d{1,2}[./]'
++    ranked = sorted(range(len(sentences)), key=lambda i: (
++        bool(re.search(r'abmelden|unsubscribe|impressum|datenschutz', sentences[i], re.I)),
++        not bool(re.search(cues, sentences[i], re.I)), len(sentences[i]) < 25, i))
++    chosen = []
++    for i in ranked:
++        if sentences[i] not in [sentences[j] for j in chosen]:
++            chosen.append(i)
++        if len(chosen) == 2:
++            break
++    return ' '.join(s if len(s) <= 180 else s[:177].rsplit(' ', 1)[0] + '…'
++                    for s in (sentences[i] for i in sorted(chosen)))
++
++
++def read_message(creds, item, error):
++    uid = item.get('_imap_uid', '')
++    if item.get('_imap_account') != creds['email'].casefold() or not re.fullmatch(r'[0-9]+', uid):
++        raise error('Bitte den Posteingang neu laden.')
++    try:
++        with imaplib.IMAP4_SSL('imap.mail.yahoo.com', 993, ssl_context=ssl.create_default_context(), timeout=30) as box:
++            box.login(creds['email'], creds['password'])
++            if box.select('INBOX', readonly=True)[0] != 'OK':
++                raise error('Posteingang konnte nicht geöffnet werden.')
++            validity = box.response('UIDVALIDITY')[1]
++            if not validity or validity[0] != item['_imap_validity'].encode('ascii'):
++                raise error('Posteingang hat sich geändert. Bitte neu laden.')
++            status, parts = box.uid('fetch', uid, '(UID BODY.PEEK[])')
++            if status == 'OK':
++                for payload in parts:
++                    if isinstance(payload, tuple) and re.search(rb'\bUID\s+' + uid.encode() + rb'\b', payload[0]):
++                        msg = email.message_from_bytes(payload[1], policy=policy.default)
++                        text = body_text(msg)
++                        return {'text': text, 'summary': highlights(text)}
++    except (OSError, imaplib.IMAP4.error) as exc:
++        raise error('Yahoo konnte den Nachrichtentext nicht liefern. Bitte erneut öffnen.') from exc
++    raise error('Nachricht bei Yahoo nicht mehr verfügbar.')
+diff --git a/web/organizer.js b/web/organizer.js
+index 47061f5..69c87c2 100644
+--- a/web/organizer.js
++++ b/web/organizer.js
+@@ -66,13 +66,37 @@ function selectMail(mail){
+   if(typeof markOpenedMail==='function')markOpenedMail(mail);
+   if($('mail-placeholder'))$('mail-placeholder').hidden=true;
+   $('mail-subject').textContent=mail.subject;const received=new Date(mail.date);$('mail-sender').textContent=mail.sender+' · '+(Number.isNaN(received.getTime())?mail.date:berlinDate(received));
+-  $('mail-snippet').textContent=mail.snippet||'Kein lesbarer Textauszug vorhanden.';
+-  $('mail-partial').textContent='Textauszug ohne Anhänge. '+(mail.partial?'Nur teilweise geladen. ':'')+'Einordnung: '+mail.reason+'.';
+   $('reply-draft').value='';$('reply-instruction').value='';$('draft-status').textContent='';
+-  if(typeof selectMailExtras==='function')selectMailExtras(mail);
++  $('mail-action-status').textContent='';
++  showMailText(mail);
+   renderMail();
+   if(typeof matchMedia==='function'&&matchMedia('(max-width: 800px)').matches)$('mail-detail').scrollIntoView({behavior:'smooth',block:'start'});
+ }
++let mailViewRequest = 0;
++async function showMailText(mail){
++  const request = ++mailViewRequest;
++  const excerpt = $('mail-excerpt');
++  excerpt.open = true;
++  excerpt.querySelector('summary').textContent = 'Vollständiger Nachrichtentext';
++  $('mail-summarize').hidden = true;
++  const summary = $('mail-summary');
++  const small = document.createElement('small');
++  summary.replaceChildren(small);
++  small.textContent = 'Das Wichtigste wird geladen …';
++  $('mail-snippet').textContent = 'Nachricht wird von Yahoo geladen …';
++  $('mail-partial').textContent = '';
++  try {
++    const detail = await api('/api/mail/detail', {id:mail.id});
++    if (request !== mailViewRequest || chosenMail !== mail) return;
++    small.textContent = detail.summary ? 'Kurzfassung · ' + detail.summary : '';
++    $('mail-snippet').textContent = detail.text || 'Diese Nachricht enthält keinen lesbaren Text.';
++  } catch (error) {
++    if (request !== mailViewRequest || chosenMail !== mail) return;
++    small.textContent = '';
++    $('mail-snippet').textContent = mail.snippet || '';
++    $('mail-partial').textContent = 'Nur Vorschau. ' + error.message;
++  }
++}
+ function renderMail(){
+   const filter=$('mail-filter').value||'alle',query=($('mail-search')?.value||'').trim().toLocaleLowerCase('de');
+   const list=inbox.filter(m=>(filter==='alle'||(filter==='ungelesen'&&m.unread)||m.category===filter)&&(!query||(m.subject+' '+m.sender+' '+(m.snippet||'')).toLocaleLowerCase('de').includes(query)));
